@@ -27,3 +27,14 @@ Each board is built in three phases: washable parts first, then a **Ultrasonic b
 ## Part stock (non-LCSC parts)
 
 The **Stock** page (admins add/edit, everyone can view and print labels) manages parts that have no LCSC label, e.g. male Dupont headers from any seller. Adding an item generates a barcode `PACT_STK_nnnn` (Code 128). Print it with **Print label** on your label printer, stick it on the bag, and link the item to the BOM lines it can be used for. A linked line is then scanned before and after soldering like an LCSC part, and usage is counted against the received quantity.
+
+## Build check, bring-up tests, trace-back, CSV import
+
+- **Build check** (nav): enter how many power / main boards you want; it compares the BOM demand with LCSC and manual stock (ordered/received − used) and lists shortages. Parts with no LCSC code and no stock item are listed as not tracked.
+- **Bring-up test**: appears on a signed-off board. Required checks (rail voltages, short check, ...) must pass; optional ones (solar disconnect, LVD, I2C scan) only count if recorded. Ranges and instructions are in `src/lib/bringup.ts`.
+- **Trace** (nav): scan an LCSC bag QR, type a PICK... / WM... / C... code, scan a PACT_STK_ label -> every board that used it. Scan a board code -> which bags went onto it.
+- **Admin → Import LCSC order**: upload an LCSC order CSV. It adds the ordered quantities and can link CSV parts to BOM lines (MPN matches are pre-selected). A file imported twice asks for confirmation.
+
+## Board map (3D / 2D)
+
+The board page has a **Board map** card. The current step's parts are orange, the next target is green (click a part to pick it) and the part to solder is red. 3D uses `public/models/<MB|PW>.glb` (exported from the KiCad boards with `kicad-cli`, nodes named by reference designator); parts without a 3D model (test points, buck modules, DevKit, standoffs) get a translucent marker box at their footprint position. 2D is drawn from `public/models/<MB|PW>.json` and is the automatic fallback when WebGL or the model is unavailable. Regenerate both after a PCB change with `node scripts/build-models.mjs` (needs KiCad's `kicad-cli`; set `KICAD_CLI` if it is not found) and commit the files.

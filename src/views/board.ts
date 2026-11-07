@@ -1,7 +1,9 @@
 import { api } from '../lib/api'
 import { beep, h } from '../lib/dom'
 import { boardCodeHint, labelMatchesLine, parseBoardCode, parseLcsc, parseStockCode, type LcscLabel } from '../lib/parsers'
+import { boardMap } from '../lib/boardmap'
 import { scanPanel } from '../lib/scanner'
+import { bringupCard } from './bringup'
 import { BOARD_NAMES, type Board, type BomLine, type Placement, type Profile } from '../lib/types'
 
 interface Message {
@@ -58,7 +60,34 @@ export async function boardView(serial: string, me: Profile): Promise<{ el: HTML
   // The scan panel is created once so the camera keeps running across re-renders.
   const panel = scanPanel((raw) => void onScan(raw), 'Scan LCSC package QR…')
   const view = h('div')
-  root.append(view)
+  // Board map (3D with 2D fallback): created once so the 3D scene survives re-renders.
+  const map = boardMap(board.board_type, (d) => pickPart(d))
+  const mapCard = h('details', { class: 'card map-card', open: true }, h('summary', null, 'Board map: where the parts go'), map.el)
+  function pickPart(d: string) {
+    const line = lines.find((l) => l.designators.includes(d))
+    if (!line) return
+    if (inProgress() && !placed.has(d) && stepLines().includes(line)) {
+      selected = d
+      render()
+    } else {
+      say({ kind: 'info', text: `${d}: ${line.value ?? line.mpn} (step ${line.step}, ${line.stage})${placed.has(d) ? ' is already placed.' : line === undefined || stepLines().includes(line) ? '' : ' is not part of the current step.'}` })
+    }
+  }
+  function updateMap() {
+    if (!inProgress() || allDone()) return map.setHighlight({ pending: [] })
+    const open = openPlacement()
+    const here = stepLines()
+    const pending = here.flatMap(unplaced)
+    const first = here.find((l) => unplaced(l).length)
+    const target = open ? null : selected && pending.includes(selected) ? selected : first ? nextOf(first) : null
+    map.setHighlight({ pending, target, solder: open?.designator ?? null })
+  }
+  const testSlot = h('div')
+  root.append(view, testSlot)
+  /** Bring-up test card, shown once the board is signed off. */
+  const showTests = () => {
+    if (board.status === 'completed') void bringupCard(board, me).then((el) => testSlot.replaceChildren(el), () => {})
+  }
 
   function say(m: Message) {
     message = m
@@ -106,6 +135,7 @@ export async function boardView(serial: string, me: Profile): Promise<{ el: HTML
       await api.completeBoard(board.id, me.id)
       api.logScan(board.id, raw, 'accepted', 'sign-off')
       board = { ...board, status: 'completed', completed_at: new Date().toISOString() }
+      showTests()
       return say({ kind: 'ok', text: `Board ${board.serial} signed off as complete.` })
     }
 
@@ -289,9 +319,12 @@ export async function boardView(serial: string, me: Profile): Promise<{ el: HTML
           h('div', { class: 'bar big' }, h('div', { style: `width:${pct}%` })),
           h('div', { class: 'small' }, `${done} / ${totalCount} soldered (${pct}%)`))),
       inProgress() ? h('div', { class: 'card scan-card' }, panel.el, prompt, banner()) : (banner() ?? ''),
+      mapCard,
       h('div', { class: 'cols' }, main, h('div', { class: 'card steps' }, h('h3', null, 'Steps'), h('ol', null, ...stages))))
+    updateMap()
   }
   render()
+  showTests()
   queueMicrotask(() => panel.focus())
-  return { el: root, destroy: panel.destroy }
+  return { el: root, destroy() { panel.destroy(); map.destroy() } }
 }

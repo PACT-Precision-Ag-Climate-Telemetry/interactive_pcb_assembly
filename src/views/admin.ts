@@ -1,5 +1,6 @@
 import { api } from '../lib/api'
 import { h } from '../lib/dom'
+import { importCard } from './import'
 import { BOARD_NAMES, type BoardType, type BomLine, type PartAlias, type Profile } from '../lib/types'
 
 export async function adminView(me: Profile): Promise<HTMLElement> {
@@ -57,6 +58,7 @@ export async function adminView(me: Profile): Promise<HTMLElement> {
   }))
 
   return h('div', null, status,
+    importCard(bom, flash),
     h('div', { class: 'card' }, h('h2', null, 'LCSC aliases'), h('table', { class: 'table' }, h('tbody', null, aliasBody))),
     bomTable('MB'), bomTable('PW'),
     h('div', { class: 'card' }, h('h2', null, 'Users'), h('table', { class: 'table' }, users)))

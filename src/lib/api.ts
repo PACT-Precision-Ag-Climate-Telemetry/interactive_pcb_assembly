@@ -1,11 +1,25 @@
 import { supabase } from './supabase'
 import type { Board, BoardProgress, BoardType, BomLine, LcscStock, PartAlias, Placement, Profile, StockItem } from './types'
 import type { BoardCode } from './parsers'
+import type { TestResult } from './bringup'
+import type { LcscOrderRow } from './csv'
 import { orderForBath } from './order'
 
 function check<T>(res: { data: T | null; error: { message: string } | null }): T {
   if (res.error) throw new Error(res.error.message)
   return res.data as T
+}
+
+export interface TraceRow {
+  designator: string
+  placed_at: string
+  soldered_at: string | null
+  pbn: string | null
+  order_no: string | null
+  lcsc_code: string | null
+  mpn: string | null
+  stock_item_id: string | null
+  boards: { serial: string; board_type: BoardType; status: string } | null
 }
 
 export const api = {
@@ -119,6 +133,41 @@ export const api = {
     if (error) throw new Error(error.message)
     return count ?? 0
   },
+  async tests(boardId: string): Promise<TestResult[]> {
+    return check(await supabase.from('board_tests').select('test_key,value,passed,note').eq('board_id', boardId))
+  },
+  async saveTest(boardId: string, r: TestResult, userId: string) {
+    check(await supabase.from('board_tests').upsert(
+      { board_id: boardId, test_key: r.test_key, value: r.value, passed: r.passed, note: r.note, tested_by: userId, tested_at: new Date().toISOString() },
+      { onConflict: 'board_id,test_key' }))
+  },
+
+  /** Placements that used a bag / order / part code / stock item, with the board they went onto. */
+  async trace(f: { pbn?: string; order?: string; lcsc?: string; stockId?: string }): Promise<TraceRow[]> {
+    let q = supabase.from('placements')
+      .select('designator,placed_at,soldered_at,pbn,order_no,lcsc_code,mpn,stock_item_id,boards(serial,board_type,status)')
+      .order('placed_at', { ascending: false }).limit(500)
+    if (f.pbn) q = q.eq('pbn', f.pbn)
+    if (f.order) q = q.ilike('order_no', f.order + '%')
+    if (f.lcsc) q = q.eq('lcsc_code', f.lcsc)
+    if (f.stockId) q = q.eq('stock_item_id', f.stockId)
+    return check(await q) as unknown as TraceRow[]
+  },
+
+  async importedFiles(): Promise<{ file_name: string; rows: number; imported_at: string }[]> {
+    return check(await supabase.from('lcsc_imports').select('file_name,rows,imported_at'))
+  },
+  /** Adds (or replaces) ordered quantities for the CSV rows and remembers the file name. */
+  async importLcscOrder(fileName: string, rows: LcscOrderRow[], mode: 'add' | 'replace') {
+    const current = new Map((await api.lcscStock()).map((x) => [x.lcsc_code, x.qty]))
+    const payload = rows.map((r) => ({
+      lcsc_code: r.lcsc_code, mpn: r.mpn || null, description: r.description || null,
+      qty: mode === 'add' ? (current.get(r.lcsc_code) ?? 0) + r.qty : r.qty,
+    }))
+    check(await supabase.from('lcsc_stock').upsert(payload, { onConflict: 'lcsc_code' }))
+    check(await supabase.from('lcsc_imports').upsert({ file_name: fileName, rows: rows.length, imported_at: new Date().toISOString() }, { onConflict: 'file_name' }))
+  },
+
   logScan(boardId: string | null, raw: string, result: 'accepted' | 'rejected', reason?: string) {
     void supabase.from('scan_events').insert({ board_id: boardId, raw, result, reason: reason ?? null })
   },

@@ -98,3 +98,26 @@ details summary { cursor: pointer; color: var(--brand); }
   .label-code { font: 600 10pt ui-monospace, Consolas, monospace; }
   .label-name { font-size: 8pt; }
 }
+
+.tag.fail { background: #fdeaea; color: var(--err); }
+.import-row td { vertical-align: top; }
+
+.map-card summary { cursor: pointer; font-weight: 600; margin-bottom: .5rem; }
+.map-stage { height: min(62vh, 460px); position: relative; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: #f4f6f8; display: grid; }
+.map-stage > p { position: absolute; inset: 0; margin: auto; height: 1.5rem; text-align: center; }
+.viewer3d { position: absolute; inset: 0; }
+.viewer3d canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+.btn.on { background: var(--brand); color: #fff; border-color: var(--brand); }
+.map-legend { margin-left: auto; }
+.dot { display: inline-block; width: .7rem; height: .7rem; border-radius: 50%; vertical-align: middle; margin-left: .4rem; }
+.dot.pending { background: #f59e0b; } .dot.target { background: #16a34a; } .dot.solder { background: #dc2626; }
+.viewer2d { position: absolute; inset: 0; width: 100%; height: 100%; }
+.v2-board { fill: #12372a; stroke: #0a2018; stroke-width: .4; }
+.v2-part rect { fill: #cbd5e1; stroke: #64748b; stroke-width: .25; cursor: pointer; }
+.v2-part.back rect { stroke-dasharray: 1 .6; opacity: .6; }
+.v2-part text { font-size: 1.9px; fill: #0f172a; pointer-events: none; font-family: system-ui, sans-serif; }
+.v2-part.pending rect { fill: #f59e0b; }
+.v2-part.target rect { fill: #16a34a; }
+.v2-part.solder rect { fill: #dc2626; }
+.v2-part.target rect, .v2-part.solder rect { animation: v2pulse 1s ease-in-out infinite alternate; }
+@keyframes v2pulse { from { opacity: 1; } to { opacity: .45; } }

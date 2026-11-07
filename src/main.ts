@@ -8,7 +8,9 @@ import { adminView } from './views/admin'
 import { boardView } from './views/board'
 import { dashboardView } from './views/dashboard'
 import { loginView } from './views/login'
+import { readyView } from './views/ready'
 import { stockView } from './views/stock'
+import { traceView } from './views/trace'
 
 const app = document.getElementById('app')!
 let session: Session | null = null
@@ -39,6 +41,8 @@ async function render() {
       h('strong', null, 'PACT Assembly'),
       h('a', { href: '#/', class: route === '' || route.startsWith('board/') ? 'active' : '' }, 'Boards'),
       h('a', { href: '#/stock', class: route === 'stock' ? 'active' : '' }, 'Stock'),
+      h('a', { href: '#/ready', class: route === 'ready' ? 'active' : '' }, 'Build check'),
+      h('a', { href: '#/trace', class: route === 'trace' ? 'active' : '' }, 'Trace'),
       me.role === 'admin' ? h('a', { href: '#/admin', class: route === 'admin' ? 'active' : '' }, 'Admin') : null,
       h('span', { class: 'grow' }),
       h('span', { class: 'muted small' }, `${me.email} (${me.role})`),
@@ -50,6 +54,12 @@ async function render() {
     let destroy: (() => void) | undefined
     if (route.startsWith('board/')) {
       const v = await boardView(decodeURIComponent(route.slice(6)), me)
+      el = v.el
+      destroy = v.destroy
+    } else if (route === 'ready') {
+      el = await readyView()
+    } else if (route === 'trace') {
+      const v = await traceView()
       el = v.el
       destroy = v.destroy
     } else if (route === 'stock') {
