@@ -2,7 +2,7 @@ import { api, type TraceRow } from '../lib/api'
 import { beep, h } from '../lib/dom'
 import { parseBoardCode, parseLcsc, parseStockCode } from '../lib/parsers'
 import { scanPanel } from '../lib/scanner'
-import { BOARD_NAMES } from '../lib/types'
+import { BOARD_NAMES, DEFECT_KINDS, type Defect } from '../lib/types'
 
 /**
  * Bag trace-back. Scan (or type) an LCSC bag QR, a pick batch (PICK…), an order number (WM…), an LCSC code (C…),
@@ -15,10 +15,18 @@ export async function traceView(): Promise<{ el: HTMLElement; destroy(): void }>
     ? h('a', { href: `#/board/${encodeURIComponent(r.boards.serial)}`, class: 'mono' }, r.boards.serial)
     : h('span', { class: 'muted' }, '(board deleted)')
 
-  const boardsTable = (title: string, rows: TraceRow[]) => {
+  const defectNote = (defects: Defect[]) => {
+    if (!defects.length) return ''
+    const open = defects.filter((d) => d.status === 'open').length
+    const kinds = [...new Set(defects.map((d) => DEFECT_KINDS[d.kind]))].join(', ')
+    return h('div', { class: 'banner error' }, `${defects.length} defect(s) reported against this (${open} open): ${kinds}. Boards: ${[...new Set(defects.map((d) => d.designator))].join(', ')}`)
+  }
+
+  const boardsTable = (title: string, rows: TraceRow[], defects: Defect[] = []) => {
     const byBoard = new Map<string, TraceRow[]>()
     for (const r of rows) byBoard.set(r.boards?.serial ?? '?', [...(byBoard.get(r.boards?.serial ?? '?') ?? []), r])
     return h('div', { class: 'card' }, h('h2', null, title),
+      defectNote(defects),
       rows.length ? h('p', { class: 'small muted' }, `${rows.length} placement(s) on ${byBoard.size} board(s)`) : h('p', { class: 'muted' }, 'No placements found.'),
       rows.length ? h('table', { class: 'table' },
         h('thead', null, h('tr', null, ['Board', 'Type', 'Status', 'Designator', 'Bag / order', 'Placed', 'Soldered'].map((t) => h('th', null, t)))),
@@ -58,7 +66,7 @@ export async function traceView(): Promise<{ el: HTMLElement; destroy(): void }>
         const item = await api.stockByCode(stockCode)
         if (!item) { beep(false); return out.replaceChildren(h('div', { class: 'banner error' }, `Unknown stock label ${stockCode}.`)) }
         beep(true)
-        return out.replaceChildren(boardsTable(`Stock ${item.code} · ${item.name}`, await api.trace({ stockId: item.id })))
+        return out.replaceChildren(boardsTable(`Stock ${item.code} · ${item.name}`, await api.trace({ stockId: item.id }), await api.defectsByBag({ stockId: item.id })))
       }
 
       const label = parseLcsc(text)
@@ -72,7 +80,7 @@ export async function traceView(): Promise<{ el: HTMLElement; destroy(): void }>
       else if (/^C\d+$/i.test(text)) { filter = { lcsc: text.toUpperCase() }; title = `LCSC ${text.toUpperCase()}` }
       if (!filter) { beep(false); return out.replaceChildren(h('div', { class: 'banner error' }, `Not recognised: "${text.slice(0, 60)}". Scan an LCSC bag QR, a PACT_STK_ label or a board code, or type PICK…, WM… or a C… code.`)) }
       beep(true)
-      out.replaceChildren(boardsTable(title, await api.trace(filter)))
+      out.replaceChildren(boardsTable(title, await api.trace(filter), filter.pbn || filter.lcsc ? await api.defectsByBag(filter) : []))
     } catch (e) {
       beep(false)
       out.replaceChildren(h('div', { class: 'banner error' }, e instanceof Error ? e.message : String(e)))

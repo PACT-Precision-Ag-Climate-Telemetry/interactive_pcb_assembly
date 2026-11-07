@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { BRINGUP, evaluate, summarize } from './bringup'
 import { parseLcscOrder } from './csv'
-import { readiness } from './readiness'
+import { manualShortages, readiness, shoppingCsv } from './readiness'
 import type { BomLine, StockItem } from './types'
 
 const line = (id: string, board_type: 'MB' | 'PW', designators: string[], over: Partial<BomLine> = {}): BomLine => ({
@@ -48,5 +48,17 @@ describe('csv', () => {
     const rows = parseLcscOrder('LCSC Part Number,Manufacture Part Number,Description,Quantity\nC1,A,"x, y",10\nC1,A,"x, y",5\nfoo,B,z,1\n')
     expect(rows).toEqual([{ lcsc_code: 'C1', mpn: 'A', description: 'x, y', qty: 15 }])
     expect(() => parseLcscOrder('a,b\n1,2\n')).toThrow()
+  })
+})
+
+describe('shopping list', () => {
+  it('adds spare parts and exports LCSC shortages as CSV', () => {
+    const bom = [line('r', 'PW', ['R1', 'R2'], { lcsc_code: 'C9' }), line('h', 'PW', ['J1'])]
+    const stock: StockItem[] = [{ id: 's', code: 'PACT_STK_0002', name: 'Hdr', supplier: null, qty: 0, bom_line_ids: ['h'], notes: null, created_at: '' }]
+    const lcsc = [{ lcsc_code: 'C9', mpn: 'RES, 10k', description: 'x', qty: 5 }]
+    const r = readiness({ PW: 10 }, bom, lcsc, new Map(), stock, new Map(), 0.1)
+    expect(r.rows.find((x) => x.key === 'C9')).toMatchObject({ needed: 22, left: 5, short: 17 })
+    expect(shoppingCsv(r, lcsc)).toBe('LCSC Part Number,Quantity,Manufacture Part Number,Description\nC9,17,"RES, 10k",x\n')
+    expect(manualShortages(r)).toEqual(['PACT_STK_0002 · Hdr: order 11'])
   })
 })

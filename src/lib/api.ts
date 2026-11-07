@@ -1,5 +1,5 @@
 import { supabase } from './supabase'
-import type { Board, BoardProgress, BoardType, BomLine, LcscStock, PartAlias, Placement, Profile, StockItem } from './types'
+import type { Board, BoardProgress, BoardType, BomLine, Defect, LcscStock, PartAlias, Placement, Profile, StockItem } from './types'
 import type { BoardCode } from './parsers'
 import type { TestResult } from './bringup'
 import type { LcscOrderRow } from './csv'
@@ -68,10 +68,8 @@ export const api = {
   },
   /** stock_item_id -> number of placements that consumed it. */
   async stockUsage(): Promise<Map<string, number>> {
-    const rows = check<{ stock_item_id: string }[]>(await supabase.from('placements').select('stock_item_id').not('stock_item_id', 'is', null))
-    const m = new Map<string, number>()
-    for (const r of rows) m.set(r.stock_item_id, (m.get(r.stock_item_id) ?? 0) + 1)
-    return m
+    const rows = check<{ stock_item_id: string; used: number }[]>(await supabase.from('stock_usage').select('stock_item_id,used'))
+    return new Map(rows.map((r) => [r.stock_item_id, r.used]))
   },
   async lcscStock(): Promise<LcscStock[]> {
     return check(await supabase.from('lcsc_stock').select('*').order('lcsc_code'))
@@ -81,10 +79,8 @@ export const api = {
   },
   /** lcsc_code -> number of placements that scanned a bag with this code. */
   async lcscUsage(): Promise<Map<string, number>> {
-    const rows = check<{ lcsc_code: string }[]>(await supabase.from('placements').select('lcsc_code').not('lcsc_code', 'is', null))
-    const m = new Map<string, number>()
-    for (const r of rows) m.set(r.lcsc_code, (m.get(r.lcsc_code) ?? 0) + 1)
-    return m
+    const rows = check<{ lcsc_code: string; used: number }[]>(await supabase.from('lcsc_usage').select('lcsc_code,used'))
+    return new Map(rows.map((r) => [r.lcsc_code, r.used]))
   },
   async stockUsed(id: string): Promise<number> {
     const { count, error } = await supabase.from('placements').select('id', { count: 'exact', head: true }).eq('stock_item_id', id)
@@ -166,6 +162,40 @@ export const api = {
     }))
     check(await supabase.from('lcsc_stock').upsert(payload, { onConflict: 'lcsc_code' }))
     check(await supabase.from('lcsc_imports').upsert({ file_name: fileName, rows: rows.length, imported_at: new Date().toISOString() }, { onConflict: 'file_name' }))
+  },
+
+  /** All placements (paged: the API returns at most 1000 rows per request). */
+  async allPlacements(): Promise<Placement[]> {
+    const out: Placement[] = []
+    for (let from = 0; ; from += 1000) {
+      const rows = check<Placement[]>(await supabase.from('placements').select('*').order('placed_at').range(from, from + 999))
+      out.push(...rows)
+      if (rows.length < 1000) return out
+    }
+  },
+
+  async defects(boardId?: string): Promise<Defect[]> {
+    let q = supabase.from('defects').select('*').order('reported_at', { ascending: false }).limit(1000)
+    if (boardId) q = q.eq('board_id', boardId)
+    return check(await q)
+  },
+  async addDefect(d: Pick<Defect, 'board_id' | 'designator' | 'kind' | 'note' | 'lcsc_code' | 'pbn' | 'order_no' | 'stock_item_id'>, userId: string): Promise<Defect> {
+    return check(await supabase.from('defects').insert({ ...d, reported_by: userId }).select().single())
+  },
+  async fixDefect(id: string, userId: string): Promise<Defect> {
+    return check(await supabase.from('defects').update({ status: 'fixed', fixed_by: userId, fixed_at: new Date().toISOString() }).eq('id', id).select().single())
+  },
+  /** Defects reported against a bag / LCSC code / stock item (bag data was copied at report time). */
+  async defectsByBag(f: { pbn?: string; lcsc?: string; stockId?: string }): Promise<Defect[]> {
+    let q = supabase.from('defects').select('*')
+    if (f.pbn) q = q.eq('pbn', f.pbn)
+    if (f.lcsc) q = q.eq('lcsc_code', f.lcsc)
+    if (f.stockId) q = q.eq('stock_item_id', f.stockId)
+    return check(await q)
+  },
+  async defectsForBoards(ids: string[]): Promise<Defect[]> {
+    if (!ids.length) return []
+    return check(await supabase.from('defects').select('*').in('board_id', ids.slice(0, 200)))
   },
 
   logScan(boardId: string | null, raw: string, result: 'accepted' | 'rejected', reason?: string) {

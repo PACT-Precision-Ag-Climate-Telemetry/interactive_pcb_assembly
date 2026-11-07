@@ -15,7 +15,7 @@ a { color: var(--brand); }
 .grow { flex: 1; }
 .center { min-height: 100vh; display: grid; place-items: center; padding: 1rem; }
 
-.top { display: flex; gap: 1rem; align-items: center; padding: .6rem 1rem; background: var(--brand); color: #fff; }
+.top { flex-wrap: wrap; display: flex; gap: 1rem; align-items: center; padding: .6rem 1rem; background: var(--brand); color: #fff; }
 .top a { color: #cfe9ea; text-decoration: none; padding: .2rem .5rem; border-radius: 4px; }
 .top a.active { background: rgba(255, 255, 255, .18); color: #fff; }
 .top .muted { color: #cfe9ea; }
@@ -121,3 +121,10 @@ details summary { cursor: pointer; color: var(--brand); }
 .v2-part.solder rect { fill: #dc2626; }
 .v2-part.target rect, .v2-part.solder rect { animation: v2pulse 1s ease-in-out infinite alternate; }
 @keyframes v2pulse { from { opacity: 1; } to { opacity: .45; } }
+
+.tag.stock { background: #e8eefc; color: #1e3a8a; }
+.tag.stock.fail { background: #fdeaea; color: var(--err); }
+
+.cols3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin-bottom: 1rem; }
+.cols3 ul { margin: 0; padding-left: 1.1rem; font-size: .88rem; }
+@media (max-width: 760px) { .cols3 { grid-template-columns: 1fr; } }

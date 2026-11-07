@@ -38,3 +38,11 @@ The **Stock** page (admins add/edit, everyone can view and print labels) manages
 ## Board map (3D / 2D)
 
 The board page has a **Board map** card. The current step's parts are orange, the next target is green (click a part to pick it) and the part to solder is red. 3D uses `public/models/<MB|PW>.glb` (exported from the KiCad boards with `kicad-cli`, nodes named by reference designator); parts without a 3D model (test points, buck modules, DevKit, standoffs) get a translucent marker box at their footprint position. 2D is drawn from `public/models/<MB|PW>.json` and is the automatic fallback when WebGL or the model is unavailable. Regenerate both after a PCB change with `node scripts/build-models.mjs` (needs KiCad's `kicad-cli`; set `KICAD_CLI` if it is not found) and commit the files.
+
+## Bench helpers, timing, defects, shopping list
+
+- **Follow current part** (Board map): the 3D camera (or 2D zoom) moves to the part being placed or soldered; untick it to keep the whole board in view. The choice is remembered.
+- **Stock counter**: every step card shows "N in stock" for its part (ordered/received minus all placements, red when fewer than the board still needs), and the scan message repeats it.
+- **Timing** (nav): active time per step, operator and board from the scan timestamps. Pauses over 10 minutes count as breaks; the ultrasonic bath is not counted.
+- **Defects** (board page + nav): report a problem with a placed part, optionally send it back for rework (the placement is removed and the part is scanned again). The bag is saved with the report, so the Trace page flags bags with defects. A board cannot be signed off while a defect is open.
+- **Build check → shopping list**: add a spare % and download the LCSC shortages as a CSV (part number + quantity); manual-stock shortages can be copied as text.

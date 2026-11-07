@@ -34,9 +34,21 @@ function createViewer2d(geo: Geo, onPick: (d: string) => void) {
     svg.append(g)
     nodes.set(ref, g)
   }
+  const full = svg.getAttribute('viewBox')!
+  const zoomTo = (ref: string | null | undefined) => {
+    const p = ref ? geo.parts[ref] : undefined
+    if (!p) return svg.setAttribute('viewBox', full)
+    const [a, b, c, d] = p.box
+    const cx = (a + c) / 2
+    const cy = (b + d) / 2
+    const half = Math.max(c - a, d - b, 10) / 2 + 12
+    svg.setAttribute('viewBox', `${cx - half * 1.6} ${cy - half} ${half * 3.2} ${half * 2}`)
+  }
   return {
     el: svg as unknown as HTMLElement,
-    setHighlight(hl: Highlight) {
+    setFollow(on: boolean, hl: Highlight) { zoomTo(on ? hl.solder ?? hl.target : null) },
+    setHighlight(hl: Highlight, follow: boolean) {
+      if (follow) zoomTo(hl.solder ?? hl.target)
       for (const g of nodes.values()) g.setAttribute('class', g.getAttribute('class')!.replace(/ (pending|target|solder)/g, ''))
       const add = (d: string | null | undefined, c: string) => { const g = d ? nodes.get(d) : undefined; if (g) g.setAttribute('class', g.getAttribute('class') + ' ' + c) }
       hl.pending.forEach((d) => add(d, 'pending'))
@@ -62,11 +74,18 @@ export function boardMap(type: BoardType, onPick: (designator: string) => void):
   let v2: ReturnType<typeof createViewer2d> | null = null
   let v3: Viewer3d | null = null
   let destroyed = false
+  let follow = localStorage.getItem('boardmap-follow') !== '0'
   let mode: '2d' | '3d' = (localStorage.getItem('boardmap-mode') as '2d' | '3d' | null) ?? (webgl() ? '3d' : '2d')
 
   const btn3 = h('button', { class: 'btn small', onclick: () => show('3d') }, '3D')
   const btn2 = h('button', { class: 'btn small', onclick: () => show('2d') }, '2D')
-  const reset = h('button', { class: 'btn small', onclick: () => v3?.resetView() }, 'Reset view')
+  const followBox = h('input', { type: 'checkbox', checked: follow, onchange: () => {
+    follow = followBox.checked
+    localStorage.setItem('boardmap-follow', follow ? '1' : '0')
+    v3?.setFollow(follow)
+    v2?.setFollow(follow, hl)
+  } })
+  const reset = h('button', { class: 'btn small', onclick: () => { v3?.resetView(); v2?.setFollow(false, hl) } }, 'Reset view')
 
   async function show(next: '2d' | '3d') {
     if (!geo || destroyed) return
@@ -74,7 +93,6 @@ export function boardMap(type: BoardType, onPick: (designator: string) => void):
     localStorage.setItem('boardmap-mode', next)
     btn3.classList.toggle('on', next === '3d')
     btn2.classList.toggle('on', next === '2d')
-    reset.hidden = next !== '3d'
     note.textContent = ''
     if (next === '3d') {
       stage.replaceChildren(h('p', { class: 'muted small' }, 'Loading 3D model (about 10 MB, cached after the first time)…'))
@@ -87,6 +105,7 @@ export function boardMap(type: BoardType, onPick: (designator: string) => void):
         v3 = viewer
         stage.replaceChildren(viewer.el)
         viewer.setHighlight(hl)
+        viewer.setFollow(follow)
         return
       } catch (e) {
         note.textContent = `3D unavailable (${e instanceof Error ? e.message : e}); showing the 2D map.`
@@ -100,7 +119,7 @@ export function boardMap(type: BoardType, onPick: (designator: string) => void):
     v3 = null
     v2 = createViewer2d(geo, onPick)
     stage.replaceChildren(v2.el)
-    v2.setHighlight(hl)
+    v2.setHighlight(hl, follow)
   }
 
   fetch(`/models/${type}.json`)
@@ -110,14 +129,14 @@ export function boardMap(type: BoardType, onPick: (designator: string) => void):
 
   return {
     el: h('div', null,
-      h('div', { class: 'form-row' }, btn3, btn2, reset, note,
+      h('div', { class: 'form-row' }, btn3, btn2, reset, h('label', { class: 'small' }, followBox, ' Follow current part'), note,
         h('span', { class: 'small map-legend' },
           h('span', { class: 'dot pending' }), ' to place now ', h('span', { class: 'dot target' }), ' next ', h('span', { class: 'dot solder' }), ' solder ')),
       stage),
     setHighlight(next) {
       hl = next
       v3?.setHighlight(next)
-      v2?.setHighlight(next)
+      v2?.setHighlight(next, follow)
     },
     destroy() {
       destroyed = true

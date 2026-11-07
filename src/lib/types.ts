@@ -55,6 +55,8 @@ export interface Placement {
   placed_at: string
   soldered_at: string | null
   soldered_raw: string | null
+  placed_by?: string | null
+  soldered_by?: string | null
 }
 
 export interface PartAlias {
@@ -84,4 +86,31 @@ export interface StockItem {
   bom_line_ids: string[]
   notes: string | null
   created_at: string
+}
+
+export const DEFECT_KINDS = {
+  wrong_part: 'Wrong part',
+  bad_solder: 'Bad solder joint',
+  damaged: 'Damaged part',
+  polarity: 'Wrong orientation / polarity',
+  missing: 'Missing part',
+  other: 'Other',
+} as const
+export type DefectKind = keyof typeof DEFECT_KINDS
+
+export interface Defect {
+  id: string
+  board_id: string
+  designator: string
+  kind: DefectKind
+  note: string | null
+  status: 'open' | 'fixed'
+  lcsc_code: string | null
+  pbn: string | null
+  order_no: string | null
+  stock_item_id: string | null
+  reported_by: string | null
+  reported_at: string
+  fixed_by: string | null
+  fixed_at: string | null
 }

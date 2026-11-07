@@ -8,8 +8,10 @@ import { adminView } from './views/admin'
 import { boardView } from './views/board'
 import { dashboardView } from './views/dashboard'
 import { loginView } from './views/login'
+import { defectsView } from './views/defects'
 import { readyView } from './views/ready'
 import { stockView } from './views/stock'
+import { timingView } from './views/timing'
 import { traceView } from './views/trace'
 
 const app = document.getElementById('app')!
@@ -43,6 +45,8 @@ async function render() {
       h('a', { href: '#/stock', class: route === 'stock' ? 'active' : '' }, 'Stock'),
       h('a', { href: '#/ready', class: route === 'ready' ? 'active' : '' }, 'Build check'),
       h('a', { href: '#/trace', class: route === 'trace' ? 'active' : '' }, 'Trace'),
+      h('a', { href: '#/defects', class: route === 'defects' ? 'active' : '' }, 'Defects'),
+      h('a', { href: '#/timing', class: route === 'timing' ? 'active' : '' }, 'Timing'),
       me.role === 'admin' ? h('a', { href: '#/admin', class: route === 'admin' ? 'active' : '' }, 'Admin') : null,
       h('span', { class: 'grow' }),
       h('span', { class: 'muted small' }, `${me.email} (${me.role})`),
@@ -58,6 +62,10 @@ async function render() {
       destroy = v.destroy
     } else if (route === 'ready') {
       el = await readyView()
+    } else if (route === 'defects') {
+      el = await defectsView()
+    } else if (route === 'timing') {
+      el = await timingView()
     } else if (route === 'trace') {
       const v = await traceView()
       el = v.el

@@ -1,12 +1,13 @@
 import { api } from '../lib/api'
 import { h } from '../lib/dom'
-import { readiness } from '../lib/readiness'
+import { manualShortages, readiness, shoppingCsv } from '../lib/readiness'
 import { BOARD_NAMES, type BoardType } from '../lib/types'
 
 /** "Can I build N boards?" Compares the BOM demand with what is left in LCSC and manual stock. */
 export async function readyView(): Promise<HTMLElement> {
   const [bom, lcsc, lcscUsed, stock, stockUsed] = await Promise.all([api.bom(), api.lcscStock(), api.lcscUsage(), api.stock(), api.stockUsage()])
   const counts: Record<BoardType, number> = { MB: 1, PW: 1 }
+  let spare = 0.1
   const result = h('div')
 
   const input = (type: BoardType) => {
@@ -18,8 +19,16 @@ export async function readyView(): Promise<HTMLElement> {
     return h('label', null, `${BOARD_NAMES[type]} boards `, i)
   }
 
+  const shoppingText = (r: ReturnType<typeof readiness>) =>
+    [...r.shortages.filter((x) => x.kind === 'lcsc').map((x) => x.key + ' x ' + x.short), ...manualShortages(r)].join('\n')
+  function download(csv: string) {
+    const a = h('a', { href: URL.createObjectURL(new Blob([csv], { type: 'text/csv' })), download: 'lcsc_shopping_list.csv' })
+    a.click()
+    URL.revokeObjectURL(a.href)
+  }
+
   function render() {
-    const r = readiness(counts, bom, lcsc, lcscUsed, stock, stockUsed)
+    const r = readiness(counts, bom, lcsc, lcscUsed, stock, stockUsed, spare)
     const ok = r.shortages.length === 0
     result.replaceChildren(
       h('div', { class: `banner ${ok ? 'ok' : 'error'}` },
@@ -33,6 +42,11 @@ export async function readyView(): Promise<HTMLElement> {
           h('td', null, String(x.left)),
           h('td', { class: x.short ? 'error' : 'muted' }, x.short ? String(x.short) : 'ok'),
           h('td', { class: 'small' }, [...new Set(x.lines.map((l) => `${l.board_type} ${l.designators.join(', ')}`))].join('; ')))))),
+      r.shortages.length
+        ? h('div', { class: 'form-row' },
+          h('button', { class: 'btn primary', onclick: () => download(shoppingCsv(r, lcsc)) }, 'Download LCSC shopping list (CSV)'),
+          h('button', { class: 'btn', onclick: () => void navigator.clipboard.writeText(shoppingText(r)).then(() => alert('Copied')) }, 'Copy as text'))
+        : '',
       r.untracked.length
         ? h('div', null,
           h('h3', null, 'Not tracked (no LCSC code and no stock item)'),
@@ -44,6 +58,10 @@ export async function readyView(): Promise<HTMLElement> {
 
   return h('div', { class: 'card' }, h('h2', null, 'Build check'),
     h('p', { class: 'muted small' }, 'How many boards do you want to build? Needed parts are compared with ordered − used (LCSC) and received − used (manual stock). Parts already placed on boards are already counted as used.'),
-    h('div', { class: 'form-row' }, input('PW'), input('MB')),
+    h('div', { class: 'form-row' }, input('PW'), input('MB'),
+      h('label', null, 'Spare % ', (() => {
+        const i = h('input', { type: 'number', min: 0, max: 100, value: String(spare * 100), class: 'narrow', onchange: () => { spare = Math.max(0, +i.value || 0) / 100; render() } })
+        return i
+      })())),
     result)
 }

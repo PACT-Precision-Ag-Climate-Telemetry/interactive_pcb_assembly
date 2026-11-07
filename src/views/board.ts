@@ -3,7 +3,9 @@ import { beep, h } from '../lib/dom'
 import { boardCodeHint, labelMatchesLine, parseBoardCode, parseLcsc, parseStockCode, type LcscLabel } from '../lib/parsers'
 import { boardMap } from '../lib/boardmap'
 import { scanPanel } from '../lib/scanner'
+import { fmtDuration, boardTiming } from '../lib/timing'
 import { bringupCard } from './bringup'
+import { defectsCard } from './defects-card'
 import { BOARD_NAMES, type Board, type BomLine, type Placement, type Profile } from '../lib/types'
 
 interface Message {
@@ -34,7 +36,18 @@ export async function boardView(serial: string, me: Profile): Promise<{ el: HTML
     return { el: root, destroy() {} }
   }
   let board: Board = found
-  const [lines, aliases, placementList, stock] = await Promise.all([api.bom(board.board_type), api.aliases(), api.placements(board.id), api.stock()])
+  const [lines, aliases, placementList, stock, lcscStock, lcscUsedMap, stockUsedMap, defectList] = await Promise.all([
+    api.bom(board.board_type), api.aliases(), api.placements(board.id), api.stock(), api.lcscStock(), api.lcscUsage(), api.stockUsage(), api.defects(board.id),
+  ])
+  const lcscQty = new Map(lcscStock.map((x) => [x.lcsc_code, x.qty]))
+  const bump = (m: Map<string, number>, k: string | null | undefined, by: number) => { if (k) m.set(k, Math.max(0, (m.get(k) ?? 0) + by)) }
+  /** Parts still in stock for a BOM line (null = stock is not tracked for it). */
+  const leftFor = (l: BomLine): number | null => {
+    if (l.lcsc_code && lcscQty.has(l.lcsc_code)) return lcscQty.get(l.lcsc_code)! - (lcscUsedMap.get(l.lcsc_code) ?? 0)
+    const items = stock.filter((x) => x.bom_line_ids.includes(l.id))
+    return items.length ? items.reduce((n, x) => n + x.qty - (stockUsedMap.get(x.id) ?? 0), 0) : null
+  }
+  const unuse = (p: Placement) => { bump(lcscUsedMap, p.lcsc_code, -1); bump(stockUsedMap, p.stock_item_id, -1) }
   const stockLineIds = new Set(stock.flatMap((s) => s.bom_line_ids))
   const needsScanL = (l: BomLine) => needsScan(l, stockLineIds)
   const placed = new Map<string, Placement>(placementList.map((p) => [p.designator, p]))
@@ -82,8 +95,23 @@ export async function boardView(serial: string, me: Profile): Promise<{ el: HTML
     const target = open ? null : selected && pending.includes(selected) ? selected : first ? nextOf(first) : null
     map.setHighlight({ pending, target, solder: open?.designator ?? null })
   }
+  const defects = defectList
+  const openDefects = () => defects.filter((d) => d.status === 'open').length
+  const defectUi = defectsCard({
+    board: () => board, me, defects,
+    placements: () => [...placed.values()],
+    rework: async (d) => {
+      const p = placed.get(d)
+      if (!p) return
+      await api.removePlacement(p.id)
+      placed.delete(d)
+      unuse(p)
+      selected = null
+    },
+    onChange: () => render(),
+  })
   const testSlot = h('div')
-  root.append(view, testSlot)
+  root.append(view, testSlot, defectUi.el)
   /** Bring-up test card, shown once the board is signed off. */
   const showTests = () => {
     if (board.status === 'completed') void bringupCard(board, me).then((el) => testSlot.replaceChildren(el), () => {})
@@ -102,6 +130,8 @@ export async function boardView(serial: string, me: Profile): Promise<{ el: HTML
       soldered_at: soldered ? new Date().toISOString() : null,
     })
     placed.set(designator, p)
+    bump(lcscUsedMap, p.lcsc_code, 1)
+    bump(stockUsedMap, p.stock_item_id, 1)
     selected = null
   }
 
@@ -132,6 +162,7 @@ export async function boardView(serial: string, me: Profile): Promise<{ el: HTML
       }
       if (!inProgress()) return say({ kind: 'info', text: 'This board is already signed off.' })
       if (!allDone()) return say({ kind: 'info', text: `Board verified. ${totalCount - doneCount()} parts still to finish.` })
+      if (openDefects()) return say({ kind: 'error', text: `${openDefects()} open defect(s): mark them fixed before signing off.` })
       await api.completeBoard(board.id, me.id)
       api.logScan(board.id, raw, 'accepted', 'sign-off')
       board = { ...board, status: 'completed', completed_at: new Date().toISOString() }
@@ -198,7 +229,9 @@ export async function boardView(serial: string, me: Profile): Promise<{ el: HTML
         note = ` Warning: bag ${label.pbn} has now been used ${used} times but holds only ${label.qty}.`
       } else if (label.qty) note = ` Bag ${label.pbn}: ${used}/${label.qty} used.`
     }
-    say({ kind: warn ? 'info' : 'ok', text: `${target} ← ${hit.value ?? hit.mpn} accepted. Place and solder it, then scan the package again.${note}` })
+    const left = leftFor(hit)
+    if (left != null) note += ` ${left} left in stock.`
+    say({ kind: warn || (left != null && left < 0) ? 'info' : 'ok', text: `${target} ← ${hit.value ?? hit.mpn} accepted. Place and solder it, then scan the package again.${note}` })
   }
 
   /** Parts without an LCSC code: place, then confirm with the button. No scan. */
@@ -219,6 +252,7 @@ export async function boardView(serial: string, me: Profile): Promise<{ el: HTML
     try {
       await api.removePlacement(p.id)
       placed.delete(d)
+      unuse(p)
       say({ kind: 'info', text: `${d} removed.` })
     } catch (e) {
       say({ kind: 'error', text: e instanceof Error ? e.message : String(e) })
@@ -240,6 +274,13 @@ export async function boardView(serial: string, me: Profile): Promise<{ el: HTML
     return h('button', { class: `chip${nextOf(line) === d ? ' next' : ''}`, onclick: () => { selected = d; render() } }, d)
   }
 
+  function stockTag(l: BomLine) {
+    const left = leftFor(l)
+    if (left == null || l.kind !== 'part') return null
+    const short = left < unplaced(l).length
+    return h('span', { class: `tag stock${short ? ' fail' : ''}`, title: 'Parts left in stock (ordered or received minus all placements)' }, `${left} in stock${short ? ` (need ${unplaced(l).length})` : ''}`)
+  }
+
   function lineCard(l: BomLine) {
     const rest = unplaced(l)
     const scan = needsScanL(l)
@@ -249,6 +290,7 @@ export async function boardView(serial: string, me: Profile): Promise<{ el: HTML
         h('span', { class: 'muted' }, ` ${l.manufacturer ?? ''} `),
         h('span', { class: 'mono' }, l.mpn ?? ''),
         l.lcsc_code ? h('span', { class: 'tag' }, l.lcsc_code) : null,
+        stockTag(l),
         l.kind === 'process' ? h('span', { class: 'tag manual' }, 'process step') : h('span', { class: `tag ${scan ? 'scan' : 'manual'}` }, scan ? 'scan before + after' : 'no scan: confirm'),
         l.kind === 'part' && !l.washable ? h('span', { class: 'tag manual' }, 'not washable: fitted after the bath') : null),
       h('div', { class: 'chips' }, l.designators.map((d) => chip(l, d))),
@@ -302,7 +344,7 @@ export async function boardView(serial: string, me: Profile): Promise<{ el: HTML
       main = h('div', { class: 'card' }, h('h2', null, 'Board completed'),
         h('p', null, `Signed off ${board.completed_at ? new Date(board.completed_at).toLocaleString() : ''}. All ${totalCount} parts were placed and confirmed.`))
     } else if (allDone()) {
-      main = h('div', { class: 'card signoff' }, h('h2', null, 'All parts soldered'), h('p', null, `Final check: scan the board Data Matrix (${board.serial}) to sign off.`))
+      main = h('div', { class: 'card signoff' }, h('h2', null, 'All parts soldered'), h('p', null, openDefects() ? `${openDefects()} open defect(s) must be fixed before sign-off.` : `Final check: scan the board Data Matrix (${board.serial}) to sign off.`))
     } else {
       const here = stepLines()
       main = h('div', { class: 'card' }, h('h2', null, `Step ${step}: ${here[0].stage}`),
@@ -317,11 +359,13 @@ export async function boardView(serial: string, me: Profile): Promise<{ el: HTML
           h('h1', { class: 'mono' }, board.serial),
           h('div', { class: 'muted' }, `${BOARD_NAMES[board.board_type]} · batch ${board.batch} · seq ${board.seq}`),
           h('div', { class: 'bar big' }, h('div', { style: `width:${pct}%` })),
-          h('div', { class: 'small' }, `${done} / ${totalCount} soldered (${pct}%)`))),
+          h('div', { class: 'small' }, `${done} / ${totalCount} soldered (${pct}%)`),
+          h('div', { class: 'small muted' }, `Active time: ${fmtDuration(boardTiming(board.created_at, [...placed.values()], lines).totalSec)}`))),
       inProgress() ? h('div', { class: 'card scan-card' }, panel.el, prompt, banner()) : (banner() ?? ''),
       mapCard,
       h('div', { class: 'cols' }, main, h('div', { class: 'card steps' }, h('h3', null, 'Steps'), h('ol', null, ...stages))))
     updateMap()
+    defectUi.refresh()
   }
   render()
   showTests()

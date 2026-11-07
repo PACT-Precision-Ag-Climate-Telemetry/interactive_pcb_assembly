@@ -10,6 +10,8 @@ export interface Viewer3d {
   el: HTMLElement
   setHighlight(h: Highlight): void
   resetView(): void
+  /** When on, the camera moves to the part being placed / soldered; when off it returns to the overview. */
+  setFollow(on: boolean): void
   destroy(): void
 }
 
@@ -67,13 +69,16 @@ export async function createViewer3d(url: string, geo: Geo, onPick: (designator:
   const center = new THREE.Vector3(((ox0 + ox1) / 2) * MM, 0, ((oy0 + oy1) / 2) * MM)
   const spanX = (ox1 - ox0) * MM
   const spanZ = (oy1 - oy0) * MM
-  const resetView = () => {
-    // Distance at which the whole board fits the viewport (viewed from ~65 degrees above the board plane).
+  /** Camera pose that fits the whole board (viewed from ~65 degrees above the board plane). */
+  function overview(target: THREE.Vector3, position: THREE.Vector3) {
     const t = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2))
     const dist = Math.max(spanZ / 2 / t, spanX / 2 / (t * camera.aspect)) * 1.12 + 0.01
-    const tilt = THREE.MathUtils.degToRad(65)
-    controls.target.copy(center)
-    camera.position.set(center.x, center.y + Math.sin(tilt) * dist, center.z + Math.cos(tilt) * dist)
+    target.copy(center)
+    position.copy(center).add(tiltDir(65).multiplyScalar(dist))
+  }
+  const resetView = () => {
+    glide = null
+    overview(controls.target, camera.position)
     camera.up.set(0, 1, 0)
     controls.update()
   }
@@ -107,6 +112,30 @@ export async function createViewer3d(url: string, geo: Geo, onPick: (designator:
     apply(h.target, 'target')
     apply(h.solder, 'solder')
     pulse = h.solder ? mats.solder : h.target ? mats.target : null
+    last = h
+    if (follow) focusOn(h.solder ?? h.target ?? null)
+  }
+
+  // ---- camera follow: glide to the current part (or back to the overview) ----
+  let follow = false
+  let last: Highlight = { pending: [] }
+  let glide: { t0: number; fromT: THREE.Vector3; toT: THREE.Vector3; fromP: THREE.Vector3; toP: THREE.Vector3 } | null = null
+  const tiltDir = (deg: number) => new THREE.Vector3(0, Math.sin(THREE.MathUtils.degToRad(deg)), Math.cos(THREE.MathUtils.degToRad(deg)))
+  function glideTo(target: THREE.Vector3, position: THREE.Vector3) {
+    glide = { t0: performance.now(), fromT: controls.target.clone(), toT: target, fromP: camera.position.clone(), toP: position }
+  }
+  function focusOn(ref: string | null) {
+    const node = ref ? parts.get(ref) : undefined
+    if (!node) {
+      const t = new THREE.Vector3()
+      const p = new THREE.Vector3()
+      overview(t, p)
+      return glideTo(t, p)
+    }
+    const box = new THREE.Box3().setFromObject(node)
+    const c = box.getCenter(new THREE.Vector3())
+    const dist = Math.min(Math.max(box.getSize(new THREE.Vector3()).length() * 2.4 + 0.04, 0.055), 0.25)
+    glideTo(c, c.clone().add(tiltDir(58).multiplyScalar(dist)))
   }
 
   // Click a part to pick it (ignore drags).
@@ -133,7 +162,7 @@ export async function createViewer3d(url: string, geo: Geo, onPick: (designator:
   }
   let touched = false // refit on resize until the user moves the camera
   controls.addEventListener('start', () => { touched = true })
-  const ro = new ResizeObserver(() => { resize(); if (!touched) resetView() })
+  const ro = new ResizeObserver(() => { resize(); if (!touched && !follow) resetView() })
   ro.observe(el)
   resize()
   resetView()
@@ -141,6 +170,13 @@ export async function createViewer3d(url: string, geo: Geo, onPick: (designator:
   let raf = 0
   const loop = (t: number) => {
     raf = requestAnimationFrame(loop)
+    if (glide) {
+      const k = Math.min(1, (performance.now() - glide.t0) / 650)
+      const e = k * k * (3 - 2 * k)
+      controls.target.lerpVectors(glide.fromT, glide.toT, e)
+      camera.position.lerpVectors(glide.fromP, glide.toP, e)
+      if (k >= 1) glide = null
+    }
     if (pulse) pulse.emissiveIntensity = 0.6 + 0.5 * Math.sin(t / 220)
     controls.update()
     renderer.render(scene, camera)
@@ -151,6 +187,10 @@ export async function createViewer3d(url: string, geo: Geo, onPick: (designator:
     el,
     setHighlight,
     resetView,
+    setFollow(on: boolean) {
+      follow = on
+      focusOn(on ? last.solder ?? last.target ?? null : null)
+    },
     destroy() {
       cancelAnimationFrame(raf)
       ro.disconnect()

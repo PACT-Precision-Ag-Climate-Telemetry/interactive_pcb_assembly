@@ -29,6 +29,8 @@ export function readiness(
   lcscUsed: Map<string, number>,
   stock: StockItem[],
   stockUsed: Map<string, number>,
+  /** Extra parts to order on top of the BOM need, e.g. 0.1 for 10 % spare. */
+  spare = 0,
 ): Readiness {
   const rows = new Map<string, ReadinessRow>()
   const untracked: Readiness['untracked'] = []
@@ -64,9 +66,26 @@ export function readiness(
     }
   }
   const list = [...rows.values()].map((r) => {
-    const needed = Math.ceil(r.needed)
+    const needed = Math.ceil(r.needed * (1 + spare) - 1e-9)
     return { ...r, needed, short: Math.max(0, needed - r.left) }
   })
   list.sort((a, b) => b.short - a.short || a.key.localeCompare(b.key, undefined, { numeric: true }))
   return { rows: list, untracked, shortages: list.filter((r) => r.short > 0) }
+}
+
+const csvCell = (v: string | number) => (/[",\n]/.test(String(v)) ? '"' + String(v).replace(/"/g, '""') + '"' : String(v))
+
+/** LCSC shortages as CSV (part number + quantity to order), ready to upload to LCSC's BOM tool. */
+export function shoppingCsv(r: Readiness, lcsc: LcscStock[]): string {
+  const info = new Map(lcsc.map((s) => [s.lcsc_code, s]))
+  const rows = r.shortages.filter((x) => x.kind === 'lcsc').map((x) => {
+    const s = info.get(x.key)
+    return [x.key, x.short, s?.mpn ?? '', s?.description ?? ''].map(csvCell).join(',')
+  })
+  return ['LCSC Part Number,Quantity,Manufacture Part Number,Description', ...rows].join('\n') + '\n'
+}
+
+/** Shortages of manually managed stock (non-LCSC parts) as plain text lines. */
+export function manualShortages(r: Readiness): string[] {
+  return r.shortages.filter((x) => x.kind === 'stock').map((x) => x.label + ': order ' + x.short)
 }
