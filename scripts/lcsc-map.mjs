@@ -44,7 +44,7 @@ export const lcscMap = {
   C480510: ['PW:J3'],                              // = Phoenix 1755752
   C50950: ['MB:J8'],                               // ~ BOOMELE 1x5 female header (BOM: Sullins PPTC051LFBN-RC)
   C2905418: ['MB:J6'],                             // ~ kinghelm 1x10 female header (BOM: Sullins PPTC101LFBN-RC)
-  C2895846: ['MB:J10', 'MB:J11', 'PW:JP1'],        // ~ 1x40 male pin header, break to 6 / 2 / 2 pins (BOM: Sullins PRPC...)
+  // C2895846 (1x40 male pin header / "male Dupont") is intentionally NOT mapped: it may come from any seller, track it as manual stock.
   // Not on-board placements (loose parts): C3715628 shunt, C90073 + C699486 mating plugs.
   // C1579437 EEU-FR1C471B is intentionally unmapped: the -B suffix is the 5 mm pitch version (see mainboard DigiKey BOM note).
 }

@@ -66,9 +66,6 @@ update public.bom_lines set lcsc_code = 'C480503' where board_type = 'PW' and de
 update public.bom_lines set lcsc_code = 'C480510' where board_type = 'PW' and designators @> array['J3'];
 update public.bom_lines set lcsc_code = 'C50950' where board_type = 'MB' and designators @> array['J8'];
 update public.bom_lines set lcsc_code = 'C2905418' where board_type = 'MB' and designators @> array['J6'];
-update public.bom_lines set lcsc_code = 'C2895846' where board_type = 'MB' and designators @> array['J10'];
-update public.bom_lines set lcsc_code = 'C2895846' where board_type = 'MB' and designators @> array['J11'];
-update public.bom_lines set lcsc_code = 'C2895846' where board_type = 'PW' and designators @> array['JP1'];
 
 insert into public.part_aliases (lcsc_code, bom_line_id)
   select 'C9114', id from public.bom_lines where board_type = 'MB' and designators @> array['Q2']

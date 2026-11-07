@@ -8,7 +8,7 @@ prepareZXingModule({
 
 // ZXing-C++ handles Data Matrix (incl. white-silkscreen-on-solder-mask, rotated, perspective) far better than zxing-js.
 const options: ReaderOptions = {
-  formats: ['DataMatrix', 'QRCode'],
+  formats: ['DataMatrix', 'QRCode', 'Code128'],
   tryHarder: true,
   tryRotate: true,
   tryInvert: true,

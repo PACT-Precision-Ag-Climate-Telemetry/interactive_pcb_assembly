@@ -1,6 +1,6 @@
 import { api } from '../lib/api'
 import { beep, h } from '../lib/dom'
-import { boardCodeHint, labelMatchesLine, parseBoardCode, parseLcsc, type LcscLabel } from '../lib/parsers'
+import { boardCodeHint, labelMatchesLine, parseBoardCode, parseLcsc, parseStockCode, type LcscLabel } from '../lib/parsers'
 import { scanPanel } from '../lib/scanner'
 import { BOARD_NAMES, type Board, type BomLine, type Placement, type Profile } from '../lib/types'
 
@@ -13,9 +13,11 @@ interface Message {
 
 /**
  * Parts WITH an LCSC code are scanned twice: before placing and again after soldering.
- * Parts WITHOUT an LCSC code are only placed and confirmed with a button (no scan).
+ * Parts WITHOUT an LCSC code and without managed stock are only placed and confirmed with a button (no scan).
+ * Parts with managed stock (own PACT_STK_ barcode) are scanned twice as well.
  */
-export const needsScan = (l: BomLine) => l.scan_required && Boolean(l.lcsc_code)
+export const needsScan = (l: BomLine, stockLineIds: Set<string> = new Set()) =>
+  l.kind === 'part' && l.scan_required && (Boolean(l.lcsc_code) || stockLineIds.has(l.id))
 
 export async function boardView(serial: string, me: Profile): Promise<{ el: HTMLElement; destroy(): void }> {
   const code = parseBoardCode(serial)
@@ -30,7 +32,9 @@ export async function boardView(serial: string, me: Profile): Promise<{ el: HTML
     return { el: root, destroy() {} }
   }
   let board: Board = found
-  const [lines, aliases, placementList] = await Promise.all([api.bom(board.board_type), api.aliases(), api.placements(board.id)])
+  const [lines, aliases, placementList, stock] = await Promise.all([api.bom(board.board_type), api.aliases(), api.placements(board.id), api.stock()])
+  const stockLineIds = new Set(stock.flatMap((s) => s.bom_line_ids))
+  const needsScanL = (l: BomLine) => needsScan(l, stockLineIds)
   const placed = new Map<string, Placement>(placementList.map((p) => [p.designator, p]))
   const lineById = new Map(lines.map((l) => [l.id, l]))
   let message: Message | null = null
@@ -62,10 +66,10 @@ export async function boardView(serial: string, me: Profile): Promise<{ el: HTML
     render()
   }
 
-  async function place(line: BomLine, designator: string, label: LcscLabel | null, raw: string | null, soldered: boolean) {
+  async function place(line: BomLine, designator: string, label: LcscLabel | null, raw: string | null, soldered: boolean, stockId: string | null = null) {
     const p = await api.addPlacement({
       board_id: board.id, designator, bom_line_id: line.id, scan_raw: raw,
-      pbn: label?.pbn ?? null, order_no: label?.on ?? null, lcsc_code: label?.pc ?? null, mpn: label?.pm ?? null, pack_qty: label?.qty ?? null,
+      pbn: label?.pbn ?? null, order_no: label?.on ?? null, lcsc_code: label?.pc ?? null, mpn: label?.pm ?? null, pack_qty: label?.qty ?? null, stock_item_id: stockId,
       soldered_at: soldered ? new Date().toISOString() : null,
     })
     placed.set(designator, p)
@@ -105,18 +109,25 @@ export async function boardView(serial: string, me: Profile): Promise<{ el: HTML
       return say({ kind: 'ok', text: `Board ${board.serial} signed off as complete.` })
     }
 
-    const label = parseLcsc(raw)
-    if (!label) return reject(`Not recognised: "${raw.slice(0, 60)}". Scan the QR on the LCSC package bag.`)
+    const stockCode = parseStockCode(raw)
+    const stockItem = stockCode ? stock.find((x) => x.code === stockCode) ?? (await api.stockByCode(stockCode)) : null
+    if (stockCode && !stockItem) return reject(`Unknown stock label ${stockCode}. Add it on the Stock page first.`)
+    if (stockItem && !stock.includes(stockItem)) stock.push(stockItem)
+    const label: LcscLabel | null = stockItem
+      ? { pbn: null, on: null, pc: null, pm: null, qty: null, raw }
+      : parseLcsc(raw)
+    if (!label) return reject(`Not recognised: "${raw.slice(0, 60)}". Scan the QR on the LCSC bag or a PACT_STK_ stock label.`)
     if (!inProgress()) return reject('This board is already completed.')
     if (allDone()) return reject('Every part is finished. Scan the board code to sign off.')
-    const what = `${label.pc}${label.pm ? ` (${label.pm})` : ''}`
+    const what = stockItem ? `${stockItem.code} (${stockItem.name})` : `${label.pc}${label.pm ? ` (${label.pm})` : ''}`
+    const fits = (l: BomLine) => (stockItem ? stockItem.bom_line_ids.includes(l.id) : labelMatchesLine(label, l, aliases))
 
     // Second scan: confirm the part that was placed before is now soldered.
     const open = openPlacement()
     if (open) {
       const openLine = lineById.get(open.bom_line_id)!
-      if (!labelMatchesLine(label, openLine, aliases)) {
-        return reject(`Finish ${open.designator} first: solder it, then scan its package (${openLine.lcsc_code}) again. Scanned ${what} instead.`)
+      if (!fits(openLine)) {
+        return reject(`Finish ${open.designator} first: solder it, then scan its package (${openLine.lcsc_code ?? 'stock label'}) again. Scanned ${what} instead.`)
       }
       const updated = await api.markSoldered(open.id, raw, me.id)
       placed.set(open.designator, updated)
@@ -126,25 +137,31 @@ export async function boardView(serial: string, me: Profile): Promise<{ el: HTML
 
     // First scan: verify the package is the right part for the current step, then place it.
     const step = currentStep()!
-    const candidates = stepLines().filter((l) => needsScan(l) && unplaced(l).length)
-    const hit = candidates.find((l) => labelMatchesLine(label, l, aliases))
+    const candidates = stepLines().filter((l) => needsScanL(l) && unplaced(l).length)
+    const hit = candidates.find(fits)
     if (!hit) {
-      const later = lines.find((l) => l.step !== step && unplaced(l).length && labelMatchesLine(label, l, aliases))
-      const done = lines.find((l) => !unplaced(l).length && labelMatchesLine(label, l, aliases))
+      const later = lines.find((l) => l.step !== step && unplaced(l).length && fits(l))
+      const done = lines.find((l) => !unplaced(l).length && fits(l))
       if (later) return reject(`Too early: ${what} is for step ${later.step} (${later.stage}: ${later.designators.join(', ')}). Current step is ${step}.`, label)
       if (done) return reject(`${what} was already fully placed (${done.designators.join(', ')}).`)
-      const need = candidates.map((l) => `${l.designators.join(', ')} = ${l.lcsc_code}`).join(' · ')
+      const need = candidates.map((l) => `${l.designators.join(', ')} = ${l.lcsc_code ?? 'stock label'}`).join(' · ')
       return reject(`Wrong part: ${what}. Step ${step} needs: ${need || 'nothing to scan (confirm the parts below)'}.`, label)
     }
 
     const pend = unplaced(hit)
     const target = selected && pend.includes(selected) ? selected : pend[0]
-    await place(hit, target, label, raw, false)
+    await place(hit, target, label, raw, false, stockItem?.id ?? null)
     api.logScan(board.id, raw, 'accepted', `${target} placed`)
 
     let note = ''
     let warn = false
-    if (label.pbn && label.pc) {
+    if (stockItem) {
+      const used = await api.stockUsed(stockItem.id).catch(() => 0)
+      if (used > stockItem.qty) {
+        warn = true
+        note = ` Warning: stock ${stockItem.code} has been used ${used} times but only ${stockItem.qty} were added.`
+      } else note = ` Stock ${stockItem.code}: ${used}/${stockItem.qty} used.`
+    } else if (label.pbn && label.pc) {
       const used = await api.bagUsage(label.pbn, label.on, label.pc).catch(() => 0)
       if (label.qty && used > label.qty) {
         warn = true
@@ -195,20 +212,21 @@ export async function boardView(serial: string, me: Profile): Promise<{ el: HTML
 
   function lineCard(l: BomLine) {
     const rest = unplaced(l)
-    const scan = needsScan(l)
+    const scan = needsScanL(l)
     return h('div', { class: `part${remaining(l).length ? '' : ' complete'}` },
       h('div', { class: 'part-head' },
         h('strong', null, l.value ?? l.mpn),
         h('span', { class: 'muted' }, ` ${l.manufacturer ?? ''} `),
         h('span', { class: 'mono' }, l.mpn ?? ''),
         l.lcsc_code ? h('span', { class: 'tag' }, l.lcsc_code) : null,
-        h('span', { class: `tag ${scan ? 'scan' : 'manual'}` }, scan ? 'scan before + after' : 'no scan: confirm')),
+        l.kind === 'process' ? h('span', { class: 'tag manual' }, 'process step') : h('span', { class: `tag ${scan ? 'scan' : 'manual'}` }, scan ? 'scan before + after' : 'no scan: confirm'),
+        l.kind === 'part' && !l.washable ? h('span', { class: 'tag manual' }, 'not washable: fitted after the bath') : null),
       h('div', { class: 'chips' }, l.designators.map((d) => chip(l, d))),
       l.footprint ? h('div', { class: 'small muted' }, `Footprint: ${l.footprint}`) : null,
       l.orientation ? h('div', { class: 'orient' }, `Orientation: ${l.orientation}`) : null,
       l.notes ? h('div', { class: 'small' }, l.notes) : null,
       !scan && rest.length && inProgress()
-        ? h('button', { class: 'btn primary', onclick: () => void confirmManual(l, nextOf(l)) }, `${nextOf(l)} placed and soldered`)
+        ? h('button', { class: 'btn primary', onclick: () => void confirmManual(l, nextOf(l)) }, l.kind === 'process' ? 'Ultrasonic cleaning done (rinsed and dried)' : `${nextOf(l)} placed and soldered`)
         : null)
   }
 
@@ -258,7 +276,7 @@ export async function boardView(serial: string, me: Profile): Promise<{ el: HTML
     } else {
       const here = stepLines()
       main = h('div', { class: 'card' }, h('h2', null, `Step ${step}: ${here[0].stage}`),
-        h('p', { class: 'muted' }, 'Scan the package QR before placing a part and again after soldering it. Parts without an LCSC code are only confirmed.'),
+        h('p', { class: 'muted' }, 'Scan the package (LCSC QR or PACT_STK_ stock label) before placing a part and again after soldering it. Parts without a scannable label are only confirmed.'),
         ...here.map(lineCard))
     }
 

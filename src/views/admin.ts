@@ -12,7 +12,7 @@ export async function adminView(me: Profile): Promise<HTMLElement> {
     const rows = bom.filter((l) => l.board_type === type).map((l) => bomRow(l))
     return h('div', { class: 'card' }, h('h2', null, `${BOARD_NAMES[type]} BOM`),
       h('table', { class: 'table' },
-        h('thead', null, h('tr', null, ['Step', 'Designators', 'Value', 'MPN (matched to “pm”)', 'LCSC code (“pc”): set = scanned twice, empty = confirm only', 'Scan enabled'].map((t) => h('th', null, t)))),
+        h('thead', null, h('tr', null, ['Step', 'Designators', 'Value', 'MPN (matched to “pm”)', 'LCSC code (“pc”): set = scanned twice, empty = confirm only', 'Scan enabled', 'Washable (ultrasonic bath)'].map((t) => h('th', null, t)))),
         h('tbody', null, rows)))
   }
   const bomRow = (l: BomLine) => {
@@ -27,7 +27,11 @@ export async function adminView(me: Profile): Promise<HTMLElement> {
     const scan = h('input', { type: 'checkbox', checked: l.scan_required, onchange: async () => {
       await api.updateBomLine(l.id, { scan_required: scan.checked }).then(() => flash('Saved'), (e) => flash(e.message))
     } })
-    return h('tr', null, h('td', null, l.step), h('td', null, l.designators.join(', ')), h('td', null, l.value), h('td', null, mpn), h('td', null, lcsc), h('td', null, scan))
+    const wash = h('input', { type: 'checkbox', checked: l.washable, disabled: l.kind === 'process', onchange: async () => {
+      await api.updateBomLine(l.id, { washable: wash.checked }).then(() => flash('Saved: takes effect for boards opened from now on'), (e) => flash(e.message))
+    } })
+    if (l.kind === 'process') return h('tr', null, h('td', null, l.step), h('td', null, 'Ultrasonic bath'), h('td', { colspan: 4, class: 'muted' }, 'Process step: washable parts come before it, non-washable parts after it.'))
+    return h('tr', null, h('td', null, l.step), h('td', null, l.designators.join(', ')), h('td', null, l.value), h('td', null, mpn), h('td', null, lcsc), h('td', null, scan), h('td', null, wash))
   }
 
   const lineName = (a: PartAlias) => {

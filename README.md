@@ -19,3 +19,11 @@ Every scan (accepted or rejected) is stored in `scan_events`; every placement re
 
 ## LCSC codes
 The BOMs were generated from the PCB projects' CSVs (`npm run gen:bom` rewrites `supabase/seed.sql`). They hold MPNs but mostly no LCSC codes. Matching on `pm` works when LCSC's MPN equals the BOM MPN. Otherwise fill the LCSC code in Admin, or, as admin, press **Link** on a rejected scan.
+
+## Ultrasonic bath order
+
+Each board is built in three phases: washable parts first, then a **Ultrasonic bath** step (confirm with the button), then parts that must not go in the bath (electrolytics, LEDs, buck modules, ESP32 DevKit, hardware). Which lines are washable is the "Washable" checkbox on the Admin BOM tables (defaults come from `scripts/build-bom.mjs`).
+
+## Part stock (non-LCSC parts)
+
+The **Stock** page (admins add/edit, everyone can view and print labels) manages parts that have no LCSC label, e.g. male Dupont headers from any seller. Adding an item generates a barcode `PACT_STK_nnnn` (Code 128). Print it with **Print label** on your label printer, stick it on the bag, and link the item to the BOM lines it can be used for. A linked line is then scanned before and after soldering like an LCSC part, and usage is counted against the received quantity.

@@ -19,6 +19,8 @@ export interface BomLine {
   orientation: string | null
   notes: string | null
   scan_required: boolean
+  washable: boolean
+  kind: 'part' | 'process'
   sort: number
 }
 
@@ -49,6 +51,7 @@ export interface Placement {
   lcsc_code: string | null
   mpn: string | null
   pack_qty: number | null
+  stock_item_id: string | null
   placed_at: string
   soldered_at: string | null
   soldered_raw: string | null
@@ -63,4 +66,22 @@ export interface Profile {
   id: string
   email: string | null
   role: 'operator' | 'admin'
+}
+
+export interface LcscStock {
+  lcsc_code: string
+  mpn: string | null
+  description: string | null
+  qty: number
+}
+
+export interface StockItem {
+  id: string
+  code: string
+  name: string
+  supplier: string | null
+  qty: number
+  bom_line_ids: string[]
+  notes: string | null
+  created_at: string
 }

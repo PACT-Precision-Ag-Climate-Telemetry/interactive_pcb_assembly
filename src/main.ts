@@ -8,6 +8,7 @@ import { adminView } from './views/admin'
 import { boardView } from './views/board'
 import { dashboardView } from './views/dashboard'
 import { loginView } from './views/login'
+import { stockView } from './views/stock'
 
 const app = document.getElementById('app')!
 let session: Session | null = null
@@ -37,6 +38,7 @@ async function render() {
     h('header', { class: 'top' },
       h('strong', null, 'PACT Assembly'),
       h('a', { href: '#/', class: route === '' || route.startsWith('board/') ? 'active' : '' }, 'Boards'),
+      h('a', { href: '#/stock', class: route === 'stock' ? 'active' : '' }, 'Stock'),
       me.role === 'admin' ? h('a', { href: '#/admin', class: route === 'admin' ? 'active' : '' }, 'Admin') : null,
       h('span', { class: 'grow' }),
       h('span', { class: 'muted small' }, `${me.email} (${me.role})`),
@@ -50,6 +52,8 @@ async function render() {
       const v = await boardView(decodeURIComponent(route.slice(6)), me)
       el = v.el
       destroy = v.destroy
+    } else if (route === 'stock') {
+      el = await stockView(me)
     } else if (route === 'admin') {
       el = await adminView(me)
     } else {

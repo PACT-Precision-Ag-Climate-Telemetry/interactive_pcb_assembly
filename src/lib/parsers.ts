@@ -57,6 +57,12 @@ export function parseBoardCode(raw: string): BoardCode | null {
   return { serial: `PACT_${type}_${m[2]}_${m[3]}`, type, batch: m[2], seq: m[3] }
 }
 
+/** Barcode printed for manually managed stock: PACT_STK_0001 */
+export function parseStockCode(raw: string): string | null {
+  const m = /PACT_STK_([A-Za-z0-9]+)/i.exec(raw)
+  return m ? 'PACT_STK_' + m[1].toUpperCase() : null
+}
+
 export const boardCodeHint = (type: BoardType) =>
   type === 'MB' ? 'PACT_MB_<batch>_<seq>' : 'PACT_PW_<batch>_<seq>'
 

@@ -6,7 +6,7 @@ const SAMPLE = '{pbn:PICK2610300010,on:WM2610300148001,pc:C3204125,pm:0031.8201,
 
 const line = (over: Partial<BomLine>): BomLine => ({
   id: 'l1', board_type: 'PW', step: 1, stage: 's', designators: ['F1'], value: null, footprint: null,
-  manufacturer: null, mpn: '0031.8201', lcsc_code: null, orientation: null, notes: null, scan_required: true, sort: 1, ...over,
+  manufacturer: null, mpn: '0031.8201', lcsc_code: null, orientation: null, notes: null, scan_required: true, washable: true, kind: 'part', sort: 1, ...over,
 })
 
 describe('parseLcsc', () => {
