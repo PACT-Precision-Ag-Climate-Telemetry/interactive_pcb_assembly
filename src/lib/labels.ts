@@ -14,11 +14,15 @@ export function labelPayload(code: string, supplier: string | null, orderNo: str
   return [code, clean(supplier), clean(orderNo)].join('|')
 }
 
-/** Cells to print on: the picked ones, or, when one cell is picked and several copies wanted, the next free cells from it. */
-export function targetCells(selected: number[], copies: number, used: Set<number>): number[] {
+/**
+ * Cells for `count` labels. Two or more picked cells: exactly those (in order). One picked cell: that cell and the next free ones.
+ * Nothing picked: the first free cells on the sheet.
+ */
+export function targetCells(selected: number[], count: number, used: Set<number>): number[] {
   const picked = [...new Set(selected)].sort((a, b) => a - b)
-  if (picked.length !== 1 || copies <= 1) return picked
+  if (picked.length >= 2) return picked
+  const start = picked.length === 1 ? picked[0] : 0
   const out: number[] = []
-  for (let i = picked[0]; i < SHEET_CELLS && out.length < copies; i++) if (!used.has(i) || i === picked[0]) out.push(i)
+  for (let i = start; i < SHEET_CELLS && out.length < count; i++) if (!used.has(i) || i === picked[0]) out.push(i)
   return out
 }

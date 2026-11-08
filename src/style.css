@@ -137,3 +137,5 @@ details summary { cursor: pointer; color: var(--brand); }
 .cols3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin-bottom: 1rem; }
 .cols3 ul { margin: 0; padding-left: 1.1rem; font-size: .88rem; }
 @media (max-width: 760px) { .cols3 { grid-template-columns: 1fr; } }
+.queue-row { align-items: center; }
+.sheet-cell small { display: block; font-size: .55rem; opacity: .9; }

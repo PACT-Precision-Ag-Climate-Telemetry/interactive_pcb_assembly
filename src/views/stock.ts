@@ -79,7 +79,7 @@ export async function stockView(me: Profile): Promise<HTMLElement> {
           ? picker(linked, () => { it.bom_line_ids = [...linked]; void save({ bom_line_ids: it.bom_line_ids }) })
           : it.bom_line_ids.map((id) => parts.find((l) => l.id === id)).filter(Boolean).map((l) => lineLabel(l!)).join('; ') || '—'),
         h('td', { class: 'actions' },
-          h('button', { class: 'btn small', onclick: () => sheet.show(it) }, 'Print label'),
+          h('button', { class: 'btn small', onclick: () => sheet.show(it) }, 'Add to label sheet'),
           admin ? h('button', { class: 'btn small', onclick: async () => {
             const n = Number(prompt(`Add how many pieces to ${it.code}? (negative to remove)`, '0'))
             if (!Number.isFinite(n) || !n) return
