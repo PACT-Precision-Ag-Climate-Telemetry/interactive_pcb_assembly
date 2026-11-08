@@ -87,11 +87,13 @@ async function render() {
   }
 }
 
-supabase.auth.onAuthStateChange((event, s) => {
-  if (event === 'TOKEN_REFRESHED') return
-  if (s?.user.id !== session?.user.id) profile = null
+supabase.auth.onAuthStateChange((_event, s) => {
+  // Supabase re-emits SIGNED_IN / TOKEN_REFRESHED / USER_UPDATED when the browser tab regains focus.
+  // Re-rendering then would wipe whatever the user typed, so only rebuild the page when the user really changed.
+  const changed = (s?.user.id ?? null) !== (session?.user.id ?? null)
+  if (changed) profile = null
   session = s
-  void render()
+  if (changed) void render()
 })
 window.addEventListener('hashchange', () => void render())
 void supabase.auth.getSession().then(({ data }) => {
