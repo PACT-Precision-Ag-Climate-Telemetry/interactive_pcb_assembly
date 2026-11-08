@@ -19,7 +19,7 @@ describe('readiness', () => {
   ]
   const stock: StockItem[] = [{ id: 's1', code: 'PACT_STK_0001', name: 'Header', supplier: null, order_no: null, by_pins: false, qty: 3, bom_line_ids: ['hdr'], notes: null, created_at: '' }]
   it('pools LCSC demand across boards and flags shortages', () => {
-    const r = readiness({ MB: 5, PW: 5 }, bom, [{ lcsc_code: 'C1', mpn: 'R', description: null, qty: 25 }], new Map([['C1', 3]]), stock, new Map([['s1', 1]]))
+    const r = readiness({ MB: 5, PW: 5 }, bom, [{ lcsc_code: 'C1', mpn: 'R', description: null, qty: 25, pins_per_unit: 1 }], new Map([['C1', 3]]), stock, new Map([['s1', 1]]))
     const c1 = r.rows.find((x) => x.key === 'C1')!
     expect([c1.needed, c1.left, c1.short]).toEqual([20, 22, 0])
     const hdr = r.rows.find((x) => x.key === 'PACT_STK_0001')!
@@ -59,10 +59,17 @@ describe('csv', () => {
 })
 
 describe('shopping list', () => {
+  it('counts an LCSC 1x40 header strip in pins and orders whole strips', () => {
+    const hdr = { ...line('j10', 'MB', ['J10'], { lcsc_code: 'C2895846' }), footprint: 'PinHeader_1x06_P2.54mm_Vertical' }
+    const lcsc = [{ lcsc_code: 'C2895846', mpn: 'PZ254V-11-40P', description: 'Pin Header 40 Position', qty: 1, pins_per_unit: 40 }]
+    const r = readiness({ MB: 10 }, [hdr], lcsc, new Map([['C2895846', 6]]), [], new Map())
+    expect(r.rows[0]).toMatchObject({ needed: 60, left: 34, short: 26 })
+    expect(shoppingCsv(r, lcsc)).toContain('C2895846,1,')
+  })
   it('adds spare parts and exports LCSC shortages as CSV', () => {
     const bom = [line('r', 'PW', ['R1', 'R2'], { lcsc_code: 'C9' }), line('h', 'PW', ['J1'])]
     const stock: StockItem[] = [{ id: 's', code: 'PACT_STK_0002', name: 'Hdr', supplier: null, order_no: null, by_pins: false, qty: 0, bom_line_ids: ['h'], notes: null, created_at: '' }]
-    const lcsc = [{ lcsc_code: 'C9', mpn: 'RES, 10k', description: 'x', qty: 5 }]
+    const lcsc = [{ lcsc_code: 'C9', mpn: 'RES, 10k', description: 'x', qty: 5, pins_per_unit: 1 }]
     const r = readiness({ PW: 10 }, bom, lcsc, new Map(), stock, new Map(), 0.1)
     expect(r.rows.find((x) => x.key === 'C9')).toMatchObject({ needed: 22, left: 5, short: 17 })
     expect(shoppingCsv(r, lcsc)).toBe('LCSC Part Number,Quantity,Manufacture Part Number,Description\nC9,17,"RES, 10k",x\n')

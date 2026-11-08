@@ -1,5 +1,6 @@
 import { api } from '../lib/api'
 import { h } from '../lib/dom'
+import { lcscCapacity } from '../lib/pins'
 import { labelSheetCard } from './label-sheet'
 import { BOARD_NAMES, type BomLine, type LcscStock, type Profile } from '../lib/types'
 
@@ -105,14 +106,15 @@ export async function stockView(me: Profile): Promise<HTMLElement> {
 
   const lcscRow = (s: LcscStock) => {
     const used = lcscUsed.get(s.lcsc_code) ?? 0
-    const left = s.qty - used
+    const strip = (s.pins_per_unit ?? 1) > 1
+    const left = lcscCapacity(s) - used
     const lines = parts.filter((l) => l.lcsc_code === s.lcsc_code)
     const q = h('input', { type: 'number', min: 0, value: String(s.qty), class: 'narrow', disabled: !admin, onchange: () => {
       s.qty = Math.max(0, Math.floor(+q.value || 0))
       api.setLcscQty(s.lcsc_code, s.qty).then(() => { flash(`Saved ${s.lcsc_code}`); lcscBody.replaceChildren(...lcsc.map(lcscRow)) }, fail)
     } })
-    return h('tr', null, h('td', { class: 'mono' }, s.lcsc_code), h('td', null, s.mpn), h('td', { class: 'small' }, s.description), h('td', null, q),
-      h('td', null, String(used)), h('td', { class: left < 0 ? 'error' : left === 0 ? 'muted' : '' }, String(left)),
+    return h('tr', null, h('td', { class: 'mono' }, s.lcsc_code), h('td', null, s.mpn), h('td', { class: 'small' }, s.description), h('td', null, q, strip ? h('span', { class: 'small muted' }, ` strips × ${s.pins_per_unit} = ${lcscCapacity(s)} pins`) : null),
+      h('td', null, strip ? `${used} pins` : String(used)), h('td', { class: left < 0 ? 'error' : left === 0 ? 'muted' : '' }, strip ? `${left} pins` : String(left)),
       h('td', { class: 'small' }, lines.map(lineLabel).join('; ') || '—'))
   }
   const lcscBody = h('tbody', null, lcsc.map(lcscRow))

@@ -3,7 +3,7 @@ import { beep, h } from '../lib/dom'
 import { boardCodeHint, labelMatchesLine, parseBoardCode, parseLcsc, parseStockCode, type LcscLabel } from '../lib/parsers'
 import { boardMap } from '../lib/boardmap'
 import { scanPanel } from '../lib/scanner'
-import { stockWeight } from '../lib/pins'
+import { lcscCapacity, lcscWeight, stockWeight } from '../lib/pins'
 import { fmtDuration, boardTiming } from '../lib/timing'
 import { bringupCard } from './bringup'
 import { defectsCard } from './defects-card'
@@ -40,7 +40,8 @@ export async function boardView(serial: string, me: Profile): Promise<{ el: HTML
   const [lines, aliases, placementList, stock, lcscStock, lcscUsedMap, stockUsedMap, defectList] = await Promise.all([
     api.bom(board.board_type), api.aliases(), api.placements(board.id), api.stock(), api.lcscStock(), api.lcscUsage(), api.stockUsage(), api.defects(board.id),
   ])
-  const lcscQty = new Map(lcscStock.map((x) => [x.lcsc_code, x.qty]))
+  const lcscQty = new Map(lcscStock.map((x) => [x.lcsc_code, lcscCapacity(x)]))
+  const lcscInfo = new Map(lcscStock.map((x) => [x.lcsc_code, x]))
   const bump = (m: Map<string, number>, k: string | null | undefined, by: number) => { if (k) m.set(k, Math.max(0, (m.get(k) ?? 0) + by)) }
   /** Parts still in stock for a BOM line (null = stock is not tracked for it). */
   const leftFor = (l: BomLine): number | null => {
@@ -49,7 +50,8 @@ export async function boardView(serial: string, me: Profile): Promise<{ el: HTML
     return items.length ? items.reduce((n, x) => n + x.qty - (stockUsedMap.get(x.id) ?? 0), 0) : null
   }
   const weight = (p: Placement) => stockWeight(stock.find((s) => s.id === p.stock_item_id), lines.find((l) => l.id === p.bom_line_id))
-  const unuse = (p: Placement) => { bump(lcscUsedMap, p.lcsc_code, -1); bump(stockUsedMap, p.stock_item_id, -weight(p)) }
+  const lcscW = (p: Placement) => lcscWeight(p.lcsc_code ? lcscInfo.get(p.lcsc_code) : undefined, lines.find((l) => l.id === p.bom_line_id))
+  const unuse = (p: Placement) => { bump(lcscUsedMap, p.lcsc_code, -lcscW(p)); bump(stockUsedMap, p.stock_item_id, -weight(p)) }
   const stockLineIds = new Set(stock.flatMap((s) => s.bom_line_ids))
   const needsScanL = (l: BomLine) => needsScan(l, stockLineIds)
   const placed = new Map<string, Placement>(placementList.map((p) => [p.designator, p]))
@@ -137,7 +139,7 @@ export async function boardView(serial: string, me: Profile): Promise<{ el: HTML
       soldered_at: soldered ? new Date().toISOString() : null,
     })
     placed.set(designator, p)
-    bump(lcscUsedMap, p.lcsc_code, 1)
+    bump(lcscUsedMap, p.lcsc_code, lcscW(p))
     bump(stockUsedMap, p.stock_item_id, weight(p))
     selected = null
   }

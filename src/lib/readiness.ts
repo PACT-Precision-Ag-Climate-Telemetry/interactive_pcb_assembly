@@ -1,4 +1,4 @@
-import { pinsOf } from './pins'
+import { lcscCapacity, pinsOf } from './pins'
 import type { BoardType, BomLine, LcscStock, StockItem } from './types'
 
 export interface ReadinessRow {
@@ -39,13 +39,14 @@ export function readiness(
 
   for (const line of bom) {
     if (line.kind !== 'part') continue
-    const needed = line.designators.length * (counts[line.board_type] ?? 0)
-    if (!needed) continue
+    const base = line.designators.length * (counts[line.board_type] ?? 0)
+    if (!base) continue
+    const s = line.lcsc_code ? lcscByCode.get(line.lcsc_code) : undefined
+    const needed = s && (s.pins_per_unit ?? 1) > 1 ? base * pinsOf(line) : base // pins for strips
     if (line.lcsc_code) {
-      const s = lcscByCode.get(line.lcsc_code)
       const row = rows.get('L' + line.lcsc_code) ?? {
-        kind: 'lcsc' as const, key: line.lcsc_code, label: line.lcsc_code + (s?.mpn ? ' · ' + s.mpn : ''),
-        needed: 0, left: s ? s.qty - (lcscUsed.get(line.lcsc_code) ?? 0) : 0, short: 0, lines: [],
+        kind: 'lcsc' as const, key: line.lcsc_code, label: line.lcsc_code + (s?.mpn ? ' · ' + s.mpn : '') + ((s?.pins_per_unit ?? 1) > 1 ? ' (pins)' : ''),
+        needed: 0, left: s ? lcscCapacity(s) - (lcscUsed.get(line.lcsc_code) ?? 0) : 0, short: 0, lines: [],
       }
       row.needed += needed
       row.lines.push(line)
@@ -81,7 +82,7 @@ export function shoppingCsv(r: Readiness, lcsc: LcscStock[]): string {
   const info = new Map(lcsc.map((s) => [s.lcsc_code, s]))
   const rows = r.shortages.filter((x) => x.kind === 'lcsc').map((x) => {
     const s = info.get(x.key)
-    return [x.key, x.short, s?.mpn ?? '', s?.description ?? ''].map(csvCell).join(',')
+    return [x.key, Math.ceil(x.short / (s?.pins_per_unit ?? 1)), s?.mpn ?? '', s?.description ?? ''].map(csvCell).join(',')
   })
   return ['LCSC Part Number,Quantity,Manufacture Part Number,Description', ...rows].join('\n') + '\n'
 }

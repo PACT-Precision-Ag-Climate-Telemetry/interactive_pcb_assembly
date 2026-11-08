@@ -75,6 +75,8 @@ export interface LcscStock {
   mpn: string | null
   description: string | null
   qty: number
+  /** > 1: qty counts strips and usage is counted in pins (e.g. 40 for a 1x40 header). */
+  pins_per_unit: number
 }
 
 export interface StockItem {
