@@ -57,10 +57,10 @@ export const api = {
   async stockByCode(code: string): Promise<StockItem | null> {
     return check(await supabase.from('stock_items').select('*').eq('code', code).maybeSingle())
   },
-  async addStock(item: Pick<StockItem, 'name' | 'supplier' | 'qty' | 'bom_line_ids' | 'notes'>): Promise<StockItem> {
+  async addStock(item: Pick<StockItem, 'name' | 'supplier' | 'order_no' | 'qty' | 'bom_line_ids' | 'notes'>): Promise<StockItem> {
     return check(await supabase.from('stock_items').insert(item).select().single())
   },
-  async updateStock(id: string, patch: Partial<Pick<StockItem, 'name' | 'supplier' | 'qty' | 'bom_line_ids' | 'notes'>>) {
+  async updateStock(id: string, patch: Partial<Pick<StockItem, 'name' | 'supplier' | 'order_no' | 'qty' | 'bom_line_ids' | 'notes'>>) {
     check(await supabase.from('stock_items').update(patch).eq('id', id))
   },
   async deleteStock(id: string) {

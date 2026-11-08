@@ -82,6 +82,7 @@ export interface StockItem {
   code: string
   name: string
   supplier: string | null
+  order_no: string | null
   qty: number
   bom_line_ids: string[]
   notes: string | null

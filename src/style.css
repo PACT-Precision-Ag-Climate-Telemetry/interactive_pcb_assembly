@@ -90,14 +90,23 @@ details summary { cursor: pointer; color: var(--brand); }
 .table input[type=checkbox] { width: auto; min-width: 0; }
 
 #print-area { display: none; }
+@page { size: 165mm 224mm; margin: 0; }
 @media print {
   body > *:not(#print-area) { display: none !important; }
   #print-area { display: block; }
-  .label { page-break-after: always; text-align: center; padding: 2mm; font-family: system-ui, sans-serif; }
-  .label img { max-width: 100%; height: 14mm; }
-  .label-code { font: 600 10pt ui-monospace, Consolas, monospace; }
-  .label-name { font-size: 8pt; }
+  html, body { margin: 0; padding: 0; background: #fff; }
+  .sheet { position: relative; width: 165mm; height: 224mm; overflow: hidden; }
+  .sheet-label { position: absolute; box-sizing: border-box; display: flex; align-items: center; gap: 1mm; padding: 0.8mm 1mm; overflow: hidden; font-family: system-ui, sans-serif; color: #000; }
+  .sheet-label img { width: 11mm; height: 11mm; flex: none; image-rendering: pixelated; }
+  .sl-text { min-width: 0; line-height: 1.15; }
+  .sl-part { font: 700 6.5pt system-ui, sans-serif; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .sl-seller { font-size: 5.5pt; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .sl-code { font: 600 5.5pt ui-monospace, Consolas, monospace; }
 }
+.sheet-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; max-width: 420px; margin: .5rem 0; }
+.sheet-cell { aspect-ratio: 38 / 13; border: 1px solid var(--line); border-radius: 4px; background: #fff; cursor: pointer; font-size: .7rem; }
+.sheet-cell.used { background: repeating-linear-gradient(45deg, #eee, #eee 4px, #fafafa 4px, #fafafa 8px); color: #999; }
+.sheet-cell.sel { background: #16a34a; color: #fff; border-color: #16a34a; }
 
 .tag.fail { background: #fdeaea; color: var(--err); }
 .import-row td { vertical-align: top; }

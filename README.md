@@ -26,7 +26,7 @@ Each board is built in three phases: washable parts first, then a **Ultrasonic b
 
 ## Part stock (non-LCSC parts)
 
-The **Stock** page (admins add/edit, everyone can view and print labels) manages parts that have no LCSC label, e.g. male Dupont headers from any seller. Adding an item generates a barcode `PACT_STK_nnnn` (Code 128). Print it with **Print label** on your label printer, stick it on the bag, and link the item to the BOM lines it can be used for. A linked line is then scanned before and after soldering like an LCSC part, and usage is counted against the received quantity.
+The **Stock** page (admins add/edit, everyone can view and print labels) manages parts that have no LCSC label, e.g. male Dupont headers from any seller. Adding an item generates a code `PACT_STK_nnnn`. **Print label** opens the A5 sticker sheet (4 x 14 labels of 38 x 13 mm): click the squares you still have stickers on and print. The QR on the label holds `PACT_STK_nnnn|seller|order number` (also printed as text); squares already used are remembered on that computer, and there is a small X/Y shift for printer alignment. Stick it on the bag, and link the item to the BOM lines it can be used for. A linked line is then scanned before and after soldering like an LCSC part, and usage is counted against the received quantity.
 
 ## Build check, bring-up tests, trace-back, CSV import
 
