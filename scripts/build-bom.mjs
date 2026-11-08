@@ -40,7 +40,7 @@ const pwConfirmOnly = (r) => r.Group.startsWith('Buck modules') || r.Group === '
 const pw = []
 for (const r of pwRows) {
   if (!/^\d+$/.test(r.Step)) continue // loose parts are not placed on the board
-  const key = `${r.Step}|${r.MPN}`
+  const key = `${r.Step}|${r.MPN}|${r.Group.startsWith("Buck modules") ? r.Value : ""}` // the two buck modules are set to different voltages: one line each
   let line = pw.find((l) => l.key === key)
   if (!line) {
     line = { key, board_type: 'PW', step: +r.Step, stage: r.Group, designators: [], values: [], footprint: r['Footprint / Package'],

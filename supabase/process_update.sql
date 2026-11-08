@@ -40,6 +40,7 @@ update public.bom_lines set washable = true where board_type = 'PW' and designat
 update public.bom_lines set washable = true where board_type = 'PW' and designators @> array['J1'];
 update public.bom_lines set washable = true where board_type = 'PW' and designators @> array['J3'];
 update public.bom_lines set washable = false where board_type = 'PW' and designators @> array['M1'];
+update public.bom_lines set washable = false where board_type = 'PW' and designators @> array['M2'];
 update public.bom_lines set washable = false where board_type = 'PW' and designators @> array['H1'];
 update public.bom_lines set washable = true where board_type = 'MB' and designators @> array['Q1'];
 update public.bom_lines set washable = true where board_type = 'MB' and designators @> array['R1'];
