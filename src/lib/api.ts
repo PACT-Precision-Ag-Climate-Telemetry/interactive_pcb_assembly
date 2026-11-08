@@ -103,6 +103,10 @@ export const api = {
     )
     return { board, created: true }
   },
+  /** A signed-off board that needs rework goes back to in_progress (it must be signed off again). */
+  async reopenBoard(id: string) {
+    check(await supabase.from('boards').update({ status: 'in_progress', completed_by: null, completed_at: null }).eq('id', id))
+  },
   async completeBoard(id: string, userId: string) {
     check(await supabase.from('boards').update({ status: 'completed', completed_by: userId, completed_at: new Date().toISOString() }).eq('id', id))
   },

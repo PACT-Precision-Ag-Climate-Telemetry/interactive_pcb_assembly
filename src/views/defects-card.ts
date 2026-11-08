@@ -21,7 +21,7 @@ export function defectsCard(ctx: DefectsCtx): { el: HTMLElement; refresh(): void
   const kind = h('select', null, ...(Object.entries(DEFECT_KINDS) as [DefectKind, string][]).map(([k, label]) => h('option', { value: k }, label)))
   const note = h('input', { placeholder: 'Note (optional)', class: 'grow' })
   const rework = h('input', { type: 'checkbox', checked: true })
-  const reworkLabel = h('label', { class: 'small' }, rework, ' Send back for rework (remove placement; the part must be scanned again)')
+  const reworkLabel = h('label', { class: 'small' }, rework, ' Send back for rework (remove placement; the part must be scanned again. A signed-off board is reopened and must be signed off again)')
   const list = h('tbody')
   const flash = (t: string) => (status.textContent = t)
   const fail = (e: unknown) => flash(e instanceof Error ? e.message : String(e))
@@ -38,7 +38,7 @@ export function defectsCard(ctx: DefectsCtx): { el: HTMLElement; refresh(): void
       ctx.defects.unshift(created)
       note.value = ''
       flash(`Defect logged for ${d}.`)
-      if (rework.checked && ctx.board().status === 'in_progress') {
+      if (rework.checked) {
         await ctx.rework(d)
         flash(`Defect logged for ${d}; the part was sent back for rework.`)
       }
@@ -51,8 +51,6 @@ export function defectsCard(ctx: DefectsCtx): { el: HTMLElement; refresh(): void
     const placed = ctx.placements().map((p) => p.designator).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
     const keep = designator.value
     designator.replaceChildren(...placed.map((d) => h('option', { value: d, selected: d === keep }, d)))
-    rework.disabled = ctx.board().status !== 'in_progress'
-    if (rework.disabled) rework.checked = false
     list.replaceChildren(...ctx.defects.map((d) => h('tr', null,
       h('td', null, d.designator),
       h('td', null, DEFECT_KINDS[d.kind]),

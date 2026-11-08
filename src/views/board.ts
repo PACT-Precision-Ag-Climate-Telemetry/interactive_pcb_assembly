@@ -103,6 +103,11 @@ export async function boardView(serial: string, me: Profile): Promise<{ el: HTML
     rework: async (d) => {
       const p = placed.get(d)
       if (!p) return
+      if (board.status === 'completed') {
+        await api.reopenBoard(board.id)
+        board = { ...board, status: 'in_progress', completed_at: null }
+        testSlot.replaceChildren()
+      }
       await api.removePlacement(p.id)
       placed.delete(d)
       unuse(p)
