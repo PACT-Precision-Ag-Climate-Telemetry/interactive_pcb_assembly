@@ -1,3 +1,4 @@
+import { pinsOf } from './pins'
 import type { BoardType, BomLine, LcscStock, StockItem } from './types'
 
 export interface ReadinessRow {
@@ -60,7 +61,7 @@ export function readiness(
       const row = rows.get('S' + it.code) ?? {
         kind: 'stock' as const, key: it.code, label: it.code + ' · ' + it.name, needed: 0, left: it.qty - (stockUsed.get(it.id) ?? 0), short: 0, lines: [],
       }
-      row.needed += needed / items.length
+      row.needed += (it.by_pins ? needed * pinsOf(line) : needed) / items.length
       row.lines.push(line)
       rows.set('S' + it.code, row)
     }

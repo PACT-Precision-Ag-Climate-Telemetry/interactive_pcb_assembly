@@ -57,10 +57,10 @@ export const api = {
   async stockByCode(code: string): Promise<StockItem | null> {
     return check(await supabase.from('stock_items').select('*').eq('code', code).maybeSingle())
   },
-  async addStock(item: Pick<StockItem, 'name' | 'supplier' | 'order_no' | 'qty' | 'bom_line_ids' | 'notes'>): Promise<StockItem> {
+  async addStock(item: Pick<StockItem, 'name' | 'supplier' | 'order_no' | 'by_pins' | 'qty' | 'bom_line_ids' | 'notes'>): Promise<StockItem> {
     return check(await supabase.from('stock_items').insert(item).select().single())
   },
-  async updateStock(id: string, patch: Partial<Pick<StockItem, 'name' | 'supplier' | 'order_no' | 'qty' | 'bom_line_ids' | 'notes'>>) {
+  async updateStock(id: string, patch: Partial<Pick<StockItem, 'name' | 'supplier' | 'order_no' | 'by_pins' | 'qty' | 'bom_line_ids' | 'notes'>>) {
     check(await supabase.from('stock_items').update(patch).eq('id', id))
   },
   async deleteStock(id: string) {
@@ -83,9 +83,8 @@ export const api = {
     return new Map(rows.map((r) => [r.lcsc_code, r.used]))
   },
   async stockUsed(id: string): Promise<number> {
-    const { count, error } = await supabase.from('placements').select('id', { count: 'exact', head: true }).eq('stock_item_id', id)
-    if (error) throw new Error(error.message)
-    return count ?? 0
+    const row = check<{ used: number } | null>(await supabase.from('stock_usage').select('used').eq('stock_item_id', id).maybeSingle())
+    return row?.used ?? 0
   },
 
   async boards(): Promise<BoardProgress[]> {

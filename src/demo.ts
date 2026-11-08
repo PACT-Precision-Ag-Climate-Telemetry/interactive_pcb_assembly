@@ -4,7 +4,7 @@ import { labelSheetCard } from './views/label-sheet'
 import { labelPayload } from './lib/labels'
 import { qrDataUrl } from './lib/barcode'
 
-const item = { id: '1', code: 'PACT_STK_0003', name: 'Male pin header 2.54 mm 1x40', supplier: 'Shopee: ABC Electronics', order_no: '2411250001234', qty: 50, bom_line_ids: [], notes: null, created_at: '' }
+const item = { id: '1', code: 'PACT_STK_0003', name: 'Male pin header 2.54 mm 1x40', supplier: 'Shopee: ABC Electronics', order_no: '2411250001234', by_pins: false, qty: 50, bom_line_ids: [], notes: null, created_at: '' }
 const item2 = { ...item, id: '2', code: 'PACT_STK_0004', name: 'Female header 2.54 mm 1x20', supplier: 'Lazada: PinShop', order_no: '2411300009876' }
 const sheet = labelSheetCard()
 const app = document.getElementById('app')!

@@ -30,21 +30,23 @@ export async function stockView(me: Profile): Promise<HTMLElement> {
   const name = h('input', { placeholder: 'Name, e.g. Male pin header 2.54 mm 1x40', class: 'grow' })
   const supplier = h('input', { placeholder: 'Seller (any seller)' })
   const orderNo = h('input', { placeholder: 'Order number' })
-  const qty = h('input', { type: 'number', min: 0, value: '0', class: 'narrow', title: 'Quantity received' })
+  const qty = h('input', { type: 'number', min: 0, value: '0', class: 'narrow', title: 'Quantity received (pins, if counted in pins)' })
+  const byPins = h('input', { type: 'checkbox' })
   const notes = h('input', { placeholder: 'Notes (optional)', class: 'grow' })
   const newLines = new Set<string>()
   const addCard = h('div', { class: 'card' }, h('h2', null, 'Add stock'),
     h('p', { class: 'muted small' }, 'For parts that do not come with an LCSC label. Each entry gets its own code (PACT_STK_nnnn). Its QR label carries the code, seller and order number: print it on the sticker sheet (you pick the square), stick it on the bag or box, and scan it during assembly like an LCSC label. A BOM line that has stock linked is scanned before and after soldering.'),
     h('div', { class: 'form-row' }, name, supplier, orderNo, h('label', null, 'Qty ', qty)),
+    h('div', { class: 'form-row' }, h('label', { class: 'small' }, byPins, ' Pin-header strip: count in pins (Qty = total pins, e.g. two 1x40 strips = 80). Each header taken from it uses as many pins as its footprint says.')),
     h('div', { class: 'form-row' }, notes),
     picker(newLines, () => {}),
     h('button', { class: 'btn primary', onclick: async () => {
       if (!name.value.trim()) return flash('Name is required.')
       try {
-        const item = await api.addStock({ name: name.value.trim(), supplier: supplier.value.trim() || null, order_no: orderNo.value.trim() || null, qty: Math.max(0, Math.floor(+qty.value || 0)),
+        const item = await api.addStock({ name: name.value.trim(), supplier: supplier.value.trim() || null, order_no: orderNo.value.trim() || null, by_pins: byPins.checked, qty: Math.max(0, Math.floor(+qty.value || 0)),
           bom_line_ids: [...newLines], notes: notes.value.trim() || null })
         items.push(item)
-        name.value = ''; supplier.value = ''; orderNo.value = ''; notes.value = ''; qty.value = '0'
+        name.value = ''; supplier.value = ''; orderNo.value = ''; notes.value = ''; qty.value = '0'; byPins.checked = false
         newLines.clear()
         addCard.querySelectorAll<HTMLInputElement>('details input').forEach((i) => (i.checked = false))
         renderRows()
@@ -63,6 +65,7 @@ export async function stockView(me: Profile): Promise<HTMLElement> {
       const nameIn = h('input', { value: it.name, disabled: !admin, onchange: () => { it.name = nameIn.value.trim(); void save({ name: it.name }) } })
       const onIn = h('input', { value: it.order_no ?? '', disabled: !admin, onchange: () => { it.order_no = onIn.value.trim() || null; void save({ order_no: it.order_no }) } })
       const supIn = h('input', { value: it.supplier ?? '', disabled: !admin, onchange: () => { it.supplier = supIn.value.trim() || null; void save({ supplier: it.supplier }) } })
+      const pinsIn = h('input', { type: 'checkbox', checked: it.by_pins, disabled: !admin, title: 'Count this stock in pins', onchange: () => { it.by_pins = pinsIn.checked; void save({ by_pins: it.by_pins }).then(renderRows) } })
       const qtyIn = h('input', { type: 'number', min: 0, value: String(it.qty), class: 'narrow', disabled: !admin, onchange: () => {
         it.qty = Math.max(0, Math.floor(+qtyIn.value || 0))
         void save({ qty: it.qty }).then(renderRows)
@@ -72,7 +75,7 @@ export async function stockView(me: Profile): Promise<HTMLElement> {
         h('td', null, nameIn),
         h('td', null, supIn),
         h('td', null, onIn),
-        h('td', null, qtyIn),
+        h('td', null, qtyIn, ' ', pinsIn, h('span', { class: 'small muted' }, ' pins')),
         h('td', null, String(used)),
         h('td', { class: left < 0 ? 'error' : left === 0 ? 'muted' : '' }, String(left)),
         h('td', null, admin

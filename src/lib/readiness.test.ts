@@ -17,7 +17,7 @@ describe('readiness', () => {
     line('tp', 'PW', ['TP1']),
     line('bath', 'PW', ['BATH'], { kind: 'process', scan_required: false }),
   ]
-  const stock: StockItem[] = [{ id: 's1', code: 'PACT_STK_0001', name: 'Header', supplier: null, order_no: null, qty: 3, bom_line_ids: ['hdr'], notes: null, created_at: '' }]
+  const stock: StockItem[] = [{ id: 's1', code: 'PACT_STK_0001', name: 'Header', supplier: null, order_no: null, by_pins: false, qty: 3, bom_line_ids: ['hdr'], notes: null, created_at: '' }]
   it('pools LCSC demand across boards and flags shortages', () => {
     const r = readiness({ MB: 5, PW: 5 }, bom, [{ lcsc_code: 'C1', mpn: 'R', description: null, qty: 25 }], new Map([['C1', 3]]), stock, new Map([['s1', 1]]))
     const c1 = r.rows.find((x) => x.key === 'C1')!
@@ -26,6 +26,13 @@ describe('readiness', () => {
     expect([hdr.needed, hdr.left, hdr.short]).toEqual([5, 2, 3])
     expect(r.shortages.map((x) => x.key)).toEqual(['PACT_STK_0001'])
     expect(r.untracked.map((u) => u.line.id)).toEqual(['tp'])
+  })
+  it('counts pin-header strips in pins', () => {
+    const hdr6 = { ...bom[2], footprint: 'PinHeader_1x06_P2.54mm_Vertical' }
+    const strip: StockItem[] = [{ ...stock[0], by_pins: true, qty: 40 }]
+    const r = readiness({ MB: 5 }, [hdr6], [], new Map(), strip, new Map([['s1', 6]]))
+    const row = r.rows.find((x) => x.key === 'PACT_STK_0001')!
+    expect([row.needed, row.left, row.short]).toEqual([30, 34, 0])
   })
 })
 
@@ -54,7 +61,7 @@ describe('csv', () => {
 describe('shopping list', () => {
   it('adds spare parts and exports LCSC shortages as CSV', () => {
     const bom = [line('r', 'PW', ['R1', 'R2'], { lcsc_code: 'C9' }), line('h', 'PW', ['J1'])]
-    const stock: StockItem[] = [{ id: 's', code: 'PACT_STK_0002', name: 'Hdr', supplier: null, order_no: null, qty: 0, bom_line_ids: ['h'], notes: null, created_at: '' }]
+    const stock: StockItem[] = [{ id: 's', code: 'PACT_STK_0002', name: 'Hdr', supplier: null, order_no: null, by_pins: false, qty: 0, bom_line_ids: ['h'], notes: null, created_at: '' }]
     const lcsc = [{ lcsc_code: 'C9', mpn: 'RES, 10k', description: 'x', qty: 5 }]
     const r = readiness({ PW: 10 }, bom, lcsc, new Map(), stock, new Map(), 0.1)
     expect(r.rows.find((x) => x.key === 'C9')).toMatchObject({ needed: 22, left: 5, short: 17 })

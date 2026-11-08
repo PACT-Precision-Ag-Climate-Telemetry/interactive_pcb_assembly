@@ -83,6 +83,7 @@ export interface StockItem {
   name: string
   supplier: string | null
   order_no: string | null
+  by_pins: boolean
   qty: number
   bom_line_ids: string[]
   notes: string | null
