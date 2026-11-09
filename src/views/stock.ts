@@ -1,11 +1,12 @@
 import { api } from '../lib/api'
 import { h } from '../lib/dom'
 import { lcscCapacity } from '../lib/pins'
-import { parseBoardCode } from '../lib/parsers'
+import { parseBoardCode, parseLcsc, parseStockCode } from '../lib/parsers'
+import { scanPanel } from '../lib/scanner'
 import { labelSheetCard } from './label-sheet'
 import { BOARD_NAMES, type BomLine, type LcscStock, type Profile, type StockCheckout } from '../lib/types'
 
-export async function stockView(me: Profile): Promise<HTMLElement> {
+export async function stockView(me: Profile): Promise<{ el: HTMLElement; destroy(): void }> {
   const admin = me.role === 'admin'
   const [items, bom, usage, lcsc, lcscUsed, checkouts] = await Promise.all([api.stock(), api.bom(), api.stockUsage(), api.lcscStock(), api.lcscUsage(), api.checkouts().catch(() => [] as StockCheckout[])])
   const parts = bom.filter((l) => l.kind === 'part')
@@ -146,11 +147,7 @@ export async function stockView(me: Profile): Promise<HTMLElement> {
     if (!checkouts.length) coBody.append(h('tr', null, h('td', { colspan: 5, class: 'muted' }, 'No manual checkouts yet.')))
   }
   const refreshAll = () => { renderRows(); lcscBody.replaceChildren(...lcsc.map(lcscRow)); renderCheckouts() }
-  const checkoutCard = h('div', { class: 'card' }, h('h2', null, 'Manual checkout'),
-    h('p', { class: 'muted small' }, 'Take parts out of stock without placing them through a BOM line (spares, samples, scrap, rework). The quantity counts as used. Pin-header strips are counted in pins.'),
-    h('div', { class: 'form-row' }, coItem, h('label', null, 'Qty ', coQty)),
-    h('div', { class: 'form-row' }, coBoard, coNote),
-    h('button', { class: 'btn primary', onclick: async () => {
+  const doCheckout = async () => {
       const n = Math.floor(+coQty.value || 0)
       if (!coItem.value) return flash('Choose a part.')
       if (n < 1) return flash('Quantity must be at least 1.')
@@ -171,11 +168,35 @@ export async function stockView(me: Profile): Promise<HTMLElement> {
         refreshAll()
         flash(`Checked out ${n} × ${itemName(c)}.`)
       } catch (e) { fail(e) }
-    } }, 'Check out'),
+  }
+  const coAuto = h('input', { type: 'checkbox' })
+  const coScan = scanPanel((raw) => void onCoScan(raw), 'Scan LCSC bag QR or PACT_STK_ label…')
+  async function onCoScan(raw: string) {
+    const sc = parseStockCode(raw)
+    let value: string | null = null
+    if (sc) {
+      const it = items.find((x) => x.code === sc)
+      if (it) value = `s:${it.id}`
+    } else {
+      const pc = parseLcsc(raw)?.pc
+      if (pc && lcsc.some((x) => x.lcsc_code === pc)) value = `l:${pc}`
+    }
+    if (!value) return flash(`Not in stock list: "${raw.slice(0, 60)}".`)
+    coItem.value = value
+    if (coAuto.checked) { coQty.value = '1'; await doCheckout() }
+    else flash(`Selected ${coItem.selectedOptions[0]?.textContent}. Set the quantity and press Check out.`)
+  }
+  const checkoutCard = h('div', { class: 'card' }, h('h2', null, 'Manual checkout'),
+    h('p', { class: 'muted small' }, 'Take parts out of stock without placing them through a BOM line (spares, samples, scrap, rework). The quantity counts as used. Pin-header strips are counted in pins.'),
+    coScan.el,
+    h('div', { class: 'form-row' }, h('label', { class: 'small' }, coAuto, ' Check out 1 immediately on each scan')),
+    h('div', { class: 'form-row' }, coItem, h('label', null, 'Qty ', coQty)),
+    h('div', { class: 'form-row' }, coBoard, coNote),
+    h('button', { class: 'btn primary', onclick: () => void doCheckout() }, 'Check out'),
     h('table', { class: 'table' }, h('thead', null, h('tr', null, ['When', 'Part', 'Qty', 'Note', ''].map((t) => h('th', null, t)))), coBody))
   renderCheckouts()
 
-  return h('div', null, status,
+  const el = h('div', null, status,
     admin ? addCard : null,
     checkoutCard,
     sheet.el,
@@ -189,4 +210,5 @@ export async function stockView(me: Profile): Promise<HTMLElement> {
       h('table', { class: 'table' },
         h('thead', null, h('tr', null, ['Code', 'Name', 'Seller', 'Order no.', 'Received', 'Used', 'Left', 'Used for', ''].map((t) => h('th', null, t)))),
         body)))
+  return { el, destroy: () => coScan.destroy() }
 }

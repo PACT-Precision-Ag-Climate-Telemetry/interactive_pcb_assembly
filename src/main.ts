@@ -71,7 +71,9 @@ async function render() {
       el = v.el
       destroy = v.destroy
     } else if (route === 'stock') {
-      el = await stockView(me)
+      const v = await stockView(me)
+      el = v.el
+      destroy = v.destroy
     } else if (route === 'admin') {
       el = await adminView(me)
     } else {
