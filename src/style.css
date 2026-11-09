@@ -139,3 +139,67 @@ details summary { cursor: pointer; color: var(--brand); }
 @media (max-width: 760px) { .cols3 { grid-template-columns: 1fr; } }
 .queue-row { align-items: center; }
 .sheet-cell small { display: block; font-size: .55rem; opacity: .9; }
+
+/* ---- Touch devices (phones / tablets) ---- */
+html { -webkit-text-size-adjust: 100%; }
+button, .chip, .btn { touch-action: manipulation; }
+.top { padding-left: max(1rem, env(safe-area-inset-left)); padding-right: max(1rem, env(safe-area-inset-right)); }
+.page { padding-left: max(1rem, env(safe-area-inset-left)); padding-right: max(1rem, env(safe-area-inset-right)); padding-bottom: max(1rem, env(safe-area-inset-bottom)); }
+
+@media (pointer: coarse) {
+  .btn { min-height: 44px; padding: .6rem 1rem; }
+  .btn.small { min-height: 38px; padding: .35rem .75rem; font-size: .85rem; }
+  .chip { min-height: 42px; padding: .4rem .9rem; font-size: 1rem; }
+  .top a { padding: .6rem .8rem; }
+  input, select { min-height: 44px; }
+  input[type=checkbox] { width: 1.4rem; height: 1.4rem; min-height: 0; }
+  .pick { padding: .4rem 0; }
+  .table th, .table td { padding: .6rem .5rem; }
+  details summary { padding: .4rem 0; }
+}
+
+/* Tablet: roomier layout, scan box stays reachable while scrolling the step list */
+@media (min-width: 761px) and (max-width: 1100px) {
+  .page { max-width: none; }
+  .cols { grid-template-columns: 1fr 200px; }
+}
+
+/* Phone */
+@media (max-width: 760px) {
+  /* 16px inputs stop iOS from zooming the page on focus */
+  input, select, textarea { font-size: 16px; }
+  .scan-input { font-size: 1.1rem; min-width: 0; }
+  .page { padding-top: .6rem; padding-left: max(.6rem, env(safe-area-inset-left)); padding-right: max(.6rem, env(safe-area-inset-right)); }
+  .card { padding: .75rem; border-radius: 6px; }
+  .top { gap: .25rem .4rem; padding: .4rem .6rem; }
+  .top > .grow { flex-basis: 100%; }
+  .scan-row { flex-wrap: wrap; }
+  .scan-row .scan-input { flex-basis: 100%; }
+  .scan-row .btn { flex: 1; }
+  .cam-wrap { max-width: 100%; }
+  .scan-card .cam { max-height: 34vh; object-fit: cover; }
+  .scan-card { position: sticky; top: 0; z-index: 5; box-shadow: 0 4px 10px rgba(0, 0, 0, .12); }
+  .board-img { width: 100%; max-height: 160px; }
+  .map-stage { height: min(48vh, 380px); }
+  .form-row > * { flex: 1 1 100%; }
+  .form-row .grow { min-width: 0; }
+  input.narrow { width: 100%; }
+  .link-row > * { flex: 1 1 100%; }
+  .part-head { gap: .2rem; }
+  .part > .btn.primary { width: 100%; }
+  .actions .btn { flex: 1; }
+  /* Wide tables scroll sideways instead of squeezing the page */
+  .table { display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; white-space: nowrap; }
+  .table td .grow, .table input { min-width: 8rem; }
+  .sheet-grid { max-width: 100%; }
+}
+
+@media (max-width: 760px) {
+  .top > strong { flex-basis: 100%; }
+  .top a { padding: .45rem .55rem; font-size: .92rem; }
+  .top > .grow { display: none; }
+  .top > .small.muted { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-left: .3rem; }
+  /* Boards list: Batch and Seq are part of the serial, so hide them on phones */
+  .boards-table th:nth-child(3), .boards-table td:nth-child(3), .boards-table th:nth-child(4), .boards-table td:nth-child(4) { display: none; }
+}
+@media (max-width: 760px) { .boards-table { white-space: normal; } .boards-table .bar { width: 60px; } }

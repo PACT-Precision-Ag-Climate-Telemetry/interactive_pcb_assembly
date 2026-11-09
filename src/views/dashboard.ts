@@ -31,7 +31,7 @@ export async function dashboardView(): Promise<{ el: HTMLElement; destroy(): voi
   }, 'Scan board Data Matrix (PACT_MB_… / PACT_PW_…)')
 
   const tbody = h('tbody')
-  const table = h('table', { class: 'table' },
+  const table = h('table', { class: 'table boards-table' },
     h('thead', null, h('tr', null, ['Serial', 'Type', 'Batch', 'Seq', 'Progress', 'Status', ''].map((t) => h('th', null, t)))), tbody)
 
   const renderRows = (boards: BoardProgress[]) => {
