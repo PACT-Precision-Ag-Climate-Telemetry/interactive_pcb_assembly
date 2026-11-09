@@ -118,3 +118,15 @@ export interface Defect {
   fixed_by: string | null
   fixed_at: string | null
 }
+
+/** Manual stock checkout outside the BOM flow (spares, samples, scrap, rework). qty is in the stock's usage unit. */
+export interface StockCheckout {
+  id: string
+  lcsc_code: string | null
+  stock_item_id: string | null
+  qty: number
+  board_id: string | null
+  note: string | null
+  created_by: string | null
+  created_at: string
+}

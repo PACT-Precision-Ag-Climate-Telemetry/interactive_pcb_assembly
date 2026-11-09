@@ -1,5 +1,5 @@
 import { supabase } from './supabase'
-import type { Board, BoardProgress, BoardType, BomLine, Defect, LcscStock, PartAlias, Placement, Profile, StockItem } from './types'
+import type { Board, BoardProgress, BoardType, BomLine, Defect, LcscStock, PartAlias, Placement, Profile, StockCheckout, StockItem } from './types'
 import type { BoardCode } from './parsers'
 import type { TestResult } from './bringup'
 import type { LcscOrderRow } from './csv'
@@ -81,6 +81,15 @@ export const api = {
   async lcscUsage(): Promise<Map<string, number>> {
     const rows = check<{ lcsc_code: string; used: number }[]>(await supabase.from('lcsc_usage').select('lcsc_code,used'))
     return new Map(rows.map((r) => [r.lcsc_code, r.used]))
+  },
+  async checkouts(): Promise<StockCheckout[]> {
+    return check(await supabase.from('stock_checkouts').select('*').order('created_at', { ascending: false }).limit(200))
+  },
+  async addCheckout(c: Pick<StockCheckout, 'lcsc_code' | 'stock_item_id' | 'qty' | 'board_id' | 'note'>): Promise<StockCheckout> {
+    return check(await supabase.from('stock_checkouts').insert(c).select().single())
+  },
+  async deleteCheckout(id: string) {
+    check(await supabase.from('stock_checkouts').delete().eq('id', id))
   },
   async stockUsed(id: string): Promise<number> {
     const row = check<{ used: number } | null>(await supabase.from('stock_usage').select('used').eq('stock_item_id', id).maybeSingle())

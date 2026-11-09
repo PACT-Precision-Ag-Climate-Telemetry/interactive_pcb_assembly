@@ -1,12 +1,13 @@
 import { api } from '../lib/api'
 import { h } from '../lib/dom'
 import { lcscCapacity } from '../lib/pins'
+import { parseBoardCode } from '../lib/parsers'
 import { labelSheetCard } from './label-sheet'
-import { BOARD_NAMES, type BomLine, type LcscStock, type Profile } from '../lib/types'
+import { BOARD_NAMES, type BomLine, type LcscStock, type Profile, type StockCheckout } from '../lib/types'
 
 export async function stockView(me: Profile): Promise<HTMLElement> {
   const admin = me.role === 'admin'
-  const [items, bom, usage, lcsc, lcscUsed] = await Promise.all([api.stock(), api.bom(), api.stockUsage(), api.lcscStock(), api.lcscUsage()])
+  const [items, bom, usage, lcsc, lcscUsed, checkouts] = await Promise.all([api.stock(), api.bom(), api.stockUsage(), api.lcscStock(), api.lcscUsage(), api.checkouts().catch(() => [] as StockCheckout[])])
   const parts = bom.filter((l) => l.kind === 'part')
   const sheet = labelSheetCard()
   const status = h('div', { class: 'small muted' })
@@ -120,8 +121,63 @@ export async function stockView(me: Profile): Promise<HTMLElement> {
   const lcscBody = h('tbody', null, lcsc.map(lcscRow))
   if (!lcsc.length) lcscBody.append(h('tr', null, h('td', { colspan: 7, class: 'muted' }, 'Run supabase/lcsc_stock.sql (after migration 0004) to load the ordered quantities.')))
 
+  // ---- manual checkout (parts taken without a BOM placement: spares, samples, scrap, rework) ----
+  const coItem = h('select', { class: 'grow' },
+    ...lcsc.map((x) => h('option', { value: `l:${x.lcsc_code}` }, `${x.lcsc_code} · ${x.mpn ?? ''}${(x.pins_per_unit ?? 1) > 1 ? ' (pins)' : ''}`)),
+    ...items.map((x) => h('option', { value: `s:${x.id}` }, `${x.code} · ${x.name}${x.by_pins ? ' (pins)' : ''}`)))
+  const coQty = h('input', { type: 'number', min: 1, value: '1', class: 'narrow', title: 'Pieces (pins for pin-header strips)' })
+  const coBoard = h('input', { placeholder: 'Board code (optional)' })
+  const coNote = h('input', { placeholder: 'Reason, e.g. spare / sample / scrap', class: 'grow' })
+  const coBody = h('tbody')
+  const itemName = (c: StockCheckout) => c.lcsc_code ?? items.find((x) => x.id === c.stock_item_id)?.code ?? '?'
+  const renderCheckouts = () => {
+    coBody.replaceChildren(...checkouts.map((c) => h('tr', null,
+      h('td', { class: 'small' }, new Date(c.created_at).toLocaleString()), h('td', { class: 'mono' }, itemName(c)), h('td', null, String(c.qty)), h('td', { class: 'small' }, c.note ?? ''),
+      h('td', null, (me.role === 'admin' || c.created_by === me.id) ? h('button', { class: 'btn small', onclick: async () => {
+        if (!confirm(`Undo checkout of ${c.qty} × ${itemName(c)}? The quantity returns to stock.`)) return
+        try {
+          await api.deleteCheckout(c.id)
+          checkouts.splice(checkouts.indexOf(c), 1)
+          if (c.lcsc_code) lcscUsed.set(c.lcsc_code, Math.max(0, (lcscUsed.get(c.lcsc_code) ?? 0) - c.qty))
+          if (c.stock_item_id) usage.set(c.stock_item_id, Math.max(0, (usage.get(c.stock_item_id) ?? 0) - c.qty))
+          refreshAll()
+        } catch (e) { fail(e) }
+      } }, 'Undo') : null))))
+    if (!checkouts.length) coBody.append(h('tr', null, h('td', { colspan: 5, class: 'muted' }, 'No manual checkouts yet.')))
+  }
+  const refreshAll = () => { renderRows(); lcscBody.replaceChildren(...lcsc.map(lcscRow)); renderCheckouts() }
+  const checkoutCard = h('div', { class: 'card' }, h('h2', null, 'Manual checkout'),
+    h('p', { class: 'muted small' }, 'Take parts out of stock without placing them through a BOM line (spares, samples, scrap, rework). The quantity counts as used. Pin-header strips are counted in pins.'),
+    h('div', { class: 'form-row' }, coItem, h('label', null, 'Qty ', coQty)),
+    h('div', { class: 'form-row' }, coBoard, coNote),
+    h('button', { class: 'btn primary', onclick: async () => {
+      const n = Math.floor(+coQty.value || 0)
+      if (!coItem.value) return flash('Choose a part.')
+      if (n < 1) return flash('Quantity must be at least 1.')
+      try {
+        let boardId: string | null = null
+        if (coBoard.value.trim()) {
+          const code = parseBoardCode(coBoard.value.trim())
+          const b = code ? await api.boardBySerial(code.serial) : null
+          if (!b) return flash('Unknown board code. Leave it empty or register the board first.')
+          boardId = b.id
+        }
+        const [kind, id] = [coItem.value[0], coItem.value.slice(2)]
+        const c = await api.addCheckout({ lcsc_code: kind === 'l' ? id : null, stock_item_id: kind === 's' ? id : null, qty: n, board_id: boardId, note: coNote.value.trim() || null })
+        checkouts.unshift(c)
+        if (c.lcsc_code) lcscUsed.set(c.lcsc_code, (lcscUsed.get(c.lcsc_code) ?? 0) + n)
+        if (c.stock_item_id) usage.set(c.stock_item_id, (usage.get(c.stock_item_id) ?? 0) + n)
+        coQty.value = '1'; coBoard.value = ''; coNote.value = ''
+        refreshAll()
+        flash(`Checked out ${n} × ${itemName(c)}.`)
+      } catch (e) { fail(e) }
+    } }, 'Check out'),
+    h('table', { class: 'table' }, h('thead', null, h('tr', null, ['When', 'Part', 'Qty', 'Note', ''].map((t) => h('th', null, t)))), coBody))
+  renderCheckouts()
+
   return h('div', null, status,
     admin ? addCard : null,
+    checkoutCard,
     sheet.el,
     h('div', { class: 'card' }, h('h2', null, 'LCSC stock'),
       h('p', { class: 'muted small' }, 'Ordered quantity comes from the LCSC order CSVs. Used = placements that scanned a bag with this code (counted when the part is placed). Left = ordered − used.'),

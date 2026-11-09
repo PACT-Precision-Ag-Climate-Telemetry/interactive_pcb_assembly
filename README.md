@@ -46,3 +46,5 @@ The board page has a **Board map** card. The current step's parts are orange, th
 - **Timing** (nav): active time per step, operator and board from the scan timestamps. Pauses over 10 minutes count as breaks; the ultrasonic bath is not counted.
 - **Defects** (board page + nav): report a problem with a placed part, optionally send it back for rework (the placement is removed and the part is scanned again). The bag is saved with the report, so the Trace page flags bags with defects. A board cannot be signed off while a defect is open.
 - **Build check → shopping list**: add a spare % and download the LCSC shortages as a CSV (part number + quantity); manual-stock shortages can be copied as text.
+
+- **Manual checkout** (Stock page): take LCSC or manual stock out without a BOM placement (spares, samples, scrap, rework). Pick the part, quantity (pins for pin-header strips), an optional board code and a reason. It counts as used everywhere (Stock, board stock counter, Build check) and can be undone. Needs `supabase/migrations/0010_stock_checkouts.sql`.
